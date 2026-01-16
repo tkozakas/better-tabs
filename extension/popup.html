@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 280px; padding: 12px; font-family: system-ui, sans-serif; font-size: 13px; }
+    h3 { margin: 0 0 12px; font-size: 14px; }
+    .btn { width: 100%; padding: 8px; margin: 4px 0; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .primary { background: #238636; color: white; }
+    .primary:hover { background: #2ea043; }
+    .secondary { background: #21262d; color: #c9d1d9; }
+    .secondary:hover { background: #30363d; }
+    .danger { background: #da3633; color: white; }
+    .danger:hover { background: #f85149; }
+    .status { padding: 8px; margin: 8px 0; border-radius: 4px; background: #161b22; }
+    .toggle { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+    input[type="checkbox"] { width: 16px; height: 16px; }
+    .code { font-family: monospace; font-size: 18px; letter-spacing: 2px; text-align: center; padding: 12px; background: #0d1117; border-radius: 4px; margin: 8px 0; }
+    .hidden { display: none; }
+    .section { margin: 12px 0; padding-top: 12px; border-top: 1px solid #30363d; }
+  </style>
+</head>
+<body>
+  <h3>Tab Grouper</h3>
+  
+  <div id="login-view" class="hidden">
+    <p>Connect to GitHub to sync your PRs</p>
+    <button class="btn primary" id="login-btn">Login with GitHub</button>
+  </div>
+  
+  <div id="code-view" class="hidden">
+    <p>Enter this code at GitHub:</p>
+    <div class="code" id="user-code"></div>
+    <p style="color: #8b949e; font-size: 11px;">Waiting for authorization...</p>
+  </div>
+  
+  <div id="main-view" class="hidden">
+    <div class="status" id="status">Loading...</div>
+    
+    <button class="btn secondary" id="refresh-btn">Refresh PRs</button>
+    <button class="btn secondary" id="group-btn">Group by Domain</button>
+    
+    <div class="section">
+      <div class="toggle">
+        <label for="review-toggle">Include review requests</label>
+        <input type="checkbox" id="review-toggle">
+      </div>
+      <div class="toggle">
+        <label for="daemon-toggle">Use CLI daemon</label>
+        <input type="checkbox" id="daemon-toggle">
+      </div>
+    </div>
+    
+    <button class="btn danger" id="logout-btn">Logout</button>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

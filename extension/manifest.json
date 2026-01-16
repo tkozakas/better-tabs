@@ -1,16 +1,23 @@
 {
   "manifest_version": 2,
   "name": "Tab Grouper",
-  "version": "1.0.6",
-  "description": "Groups browser tabs automatically via CLI",
+  "version": "2.0.1",
+  "description": "Sync GitHub PRs to browser tabs and group tabs by domain",
   "permissions": [
     "tabs",
     "tabGroups",
-    "http://localhost/*"
+    "storage",
+    "http://localhost/*",
+    "https://api.github.com/*",
+    "https://github.com/*"
   ],
   "background": {
     "scripts": ["background.js"],
     "persistent": true
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Tab Grouper"
   },
   "browser_specific_settings": {
     "gecko": {

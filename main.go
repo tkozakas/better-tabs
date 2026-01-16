@@ -5,24 +5,33 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
 	maxPRs              = 100
 	httpPort            = 19222
-	defaultSyncInterval = 5 * time.Minute
+	defaultSyncInterval = 15 * time.Second
 	groupMyPRs          = "My PRs"
 	groupReviewPRs      = "Review PRs"
 	launchdLabel        = "com.tab-grouper.daemon"
 	systemdService      = "tab-grouper"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
 type PR struct {
 	URL        string     `json:"url"`
@@ -51,96 +60,122 @@ type ReviewResponse struct {
 	} `json:"data"`
 }
 
+type Group struct {
+	URLs      []string `json:"urls"`
+	GroupName string   `json:"groupName"`
+}
+
+type Message struct {
+	Type    string   `json:"type"`
+	Groups  []Group  `json:"groups,omitempty"`
+	ToClose []string `json:"toClose,omitempty"`
+}
+
 type PRServer struct {
 	mu            sync.RWMutex
 	myPRs         []string
 	reviewPRs     []string
 	includeReview bool
 	syncInterval  time.Duration
-}
-
-type OpenUrlsRequest struct {
-	OpenUrls []string `json:"openUrls"`
-}
-
-type PRResponse struct {
-	Groups  []PRGroup `json:"groups"`
-	ToClose []string  `json:"toClose"`
-}
-
-type PRGroup struct {
-	URLs      []string `json:"urls"`
-	GroupName string   `json:"groupName"`
+	ticker        *time.Ticker
+	clients       map[*websocket.Conn]bool
+	clientsMu     sync.RWMutex
+	broadcast     chan Message
 }
 
 func main() {
-	reviewMode := flag.Bool("review", false, "Include review requests")
 	daemonMode := flag.Bool("daemon", false, "Run sync daemon")
-	refreshCmd := flag.Bool("refresh", false, "Trigger refresh")
-	installCmd := flag.Bool("install", false, "Install launchd service")
-	uninstallCmd := flag.Bool("uninstall", false, "Uninstall launchd service")
-	interval := flag.Duration("interval", defaultSyncInterval, "Sync interval")
+	startCmd := flag.Bool("start", false, "Start daemon as background service")
+	shutdownCmd := flag.Bool("shutdown", false, "Shutdown running daemon")
+	refreshCmd := flag.Bool("refresh", false, "Trigger immediate refresh")
+	groupCmd := flag.Bool("group", false, "Group all tabs by domain")
+	enableReviewCmd := flag.Bool("enable-review", false, "Enable review mode")
+	disableReviewCmd := flag.Bool("disable-review", false, "Disable review mode")
+	setIntervalCmd := flag.Duration("set-interval", 0, "Update sync interval")
 	flag.Parse()
 
-	if *installCmd {
-		installService(*reviewMode, *interval)
-		return
+	switch {
+	case *startCmd:
+		startService()
+	case *shutdownCmd:
+		shutdownService()
+	case *refreshCmd:
+		postToEndpoint("/refresh", nil, "Refreshed")
+	case *groupCmd:
+		postToEndpoint("/group", nil, "Grouping tabs by domain")
+	case *enableReviewCmd:
+		postToEndpoint("/config", map[string]any{"includeReview": true}, "Review mode enabled")
+	case *disableReviewCmd:
+		postToEndpoint("/config", map[string]any{"includeReview": false}, "Review mode disabled")
+	case *setIntervalCmd > 0:
+		postToEndpoint("/config", map[string]any{"interval": setIntervalCmd.String()}, fmt.Sprintf("Interval updated to %s", *setIntervalCmd))
+	case *daemonMode:
+		runDaemon()
+	default:
+		flag.Usage()
 	}
-
-	if *uninstallCmd {
-		uninstallService()
-		return
-	}
-
-	if *refreshCmd {
-		triggerRefresh(*reviewMode)
-		return
-	}
-
-	if *daemonMode {
-		runDaemon(*reviewMode, *interval)
-		return
-	}
-
-	flag.Usage()
 }
 
-func installService(review bool, interval time.Duration) {
+func postToEndpoint(path string, body map[string]any, successMsg string) {
+	url := fmt.Sprintf("http://localhost:%d%s", httpPort, path)
+
+	var resp *http.Response
+	var err error
+
+	if body != nil {
+		data, _ := json.Marshal(body)
+		resp, err = http.Post(url, "application/json", strings.NewReader(string(data)))
+	} else {
+		resp, err = http.Post(url, "application/json", nil)
+	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Daemon not running\n")
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "Request failed: %s\n", resp.Status)
+		os.Exit(1)
+	}
+
+	fmt.Println(successMsg)
+}
+
+func startService() {
 	switch runtime.GOOS {
 	case "darwin":
-		installLaunchd(review, interval)
+		startLaunchd()
 	case "linux":
-		installSystemd(review, interval)
+		startSystemd()
 	default:
 		fmt.Fprintf(os.Stderr, "Unsupported OS: %s\n", runtime.GOOS)
 		os.Exit(1)
 	}
 }
 
-func uninstallService() {
+func shutdownService() {
+	url := fmt.Sprintf("http://localhost:%d/shutdown", httpPort)
+	resp, err := http.Post(url, "application/json", nil)
+	if err == nil {
+		resp.Body.Close()
+	}
+
 	switch runtime.GOOS {
 	case "darwin":
-		uninstallLaunchd()
+		shutdownLaunchd()
 	case "linux":
-		uninstallSystemd()
+		shutdownSystemd()
 	default:
 		fmt.Fprintf(os.Stderr, "Unsupported OS: %s\n", runtime.GOOS)
 		os.Exit(1)
 	}
 }
 
-func installLaunchd(review bool, interval time.Duration) {
+func startLaunchd() {
 	exe, _ := os.Executable()
 	exe, _ = filepath.Abs(exe)
-
-	args := fmt.Sprintf(`<string>%s</string>
-		<string>-daemon</string>`, exe)
-	if review {
-		args += "\n\t\t<string>-review</string>"
-	}
-	if interval != defaultSyncInterval {
-		args += fmt.Sprintf("\n\t\t<string>-interval</string>\n\t\t<string>%s</string>", interval)
-	}
 
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -150,7 +185,8 @@ func installLaunchd(review bool, interval time.Duration) {
 	<string>%s</string>
 	<key>ProgramArguments</key>
 	<array>
-		%s
+		<string>%s</string>
+		<string>-daemon</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -161,7 +197,7 @@ func installLaunchd(review bool, interval time.Duration) {
 	<key>StandardErrorPath</key>
 	<string>/tmp/tab-grouper.log</string>
 </dict>
-</plist>`, launchdLabel, args)
+</plist>`, launchdLabel, exe)
 
 	plistPath := filepath.Join(os.Getenv("HOME"), "Library/LaunchAgents", launchdLabel+".plist")
 	os.MkdirAll(filepath.Dir(plistPath), 0755)
@@ -177,40 +213,32 @@ func installLaunchd(review bool, interval time.Duration) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Installed and started launchd service\nLogs: /tmp/tab-grouper.log\n")
+	fmt.Println("Started daemon (logs: /tmp/tab-grouper.log)")
 }
 
-func uninstallLaunchd() {
+func shutdownLaunchd() {
 	plistPath := filepath.Join(os.Getenv("HOME"), "Library/LaunchAgents", launchdLabel+".plist")
 	exec.Command("launchctl", "unload", plistPath).Run()
 	os.Remove(plistPath)
-	fmt.Println("Uninstalled launchd service")
+	fmt.Println("Stopped daemon")
 }
 
-func installSystemd(review bool, interval time.Duration) {
+func startSystemd() {
 	exe, _ := os.Executable()
 	exe, _ = filepath.Abs(exe)
-
-	args := exe + " -daemon"
-	if review {
-		args += " -review"
-	}
-	if interval != defaultSyncInterval {
-		args += fmt.Sprintf(" -interval %s", interval)
-	}
 
 	unit := fmt.Sprintf(`[Unit]
 Description=Tab Grouper Daemon
 After=network.target
 
 [Service]
-ExecStart=%s
+ExecStart=%s -daemon
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=default.target
-`, args)
+`, exe)
 
 	unitDir := filepath.Join(os.Getenv("HOME"), ".config/systemd/user")
 	unitPath := filepath.Join(unitDir, systemdService+".service")
@@ -228,105 +256,133 @@ WantedBy=default.target
 		os.Exit(1)
 	}
 
-	fmt.Printf("Installed and started systemd service\nLogs: journalctl --user -u %s -f\n", systemdService)
+	fmt.Printf("Started daemon (logs: journalctl --user -u %s -f)\n", systemdService)
 }
 
-func uninstallSystemd() {
+func shutdownSystemd() {
 	exec.Command("systemctl", "--user", "stop", systemdService).Run()
 	exec.Command("systemctl", "--user", "disable", systemdService).Run()
 	unitPath := filepath.Join(os.Getenv("HOME"), ".config/systemd/user", systemdService+".service")
 	os.Remove(unitPath)
 	exec.Command("systemctl", "--user", "daemon-reload").Run()
-	fmt.Println("Uninstalled systemd service")
+	fmt.Println("Stopped daemon")
 }
 
-func triggerRefresh(includeReview bool) {
-	url := fmt.Sprintf("http://localhost:%d/refresh", httpPort)
-	body := fmt.Sprintf(`{"includeReview":%v}`, includeReview)
-
-	resp, err := http.Post(url, "application/json", strings.NewReader(body))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Daemon not running: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "Refresh failed: %s\n", resp.Status)
-		os.Exit(1)
+func runDaemon() {
+	server := &PRServer{
+		syncInterval: defaultSyncInterval,
+		ticker:       time.NewTicker(defaultSyncInterval),
+		clients:      make(map[*websocket.Conn]bool),
+		broadcast:    make(chan Message, 10),
 	}
 
-	fmt.Println("Refreshed")
-}
-
-func runDaemon(includeReview bool, interval time.Duration) {
-	server := &PRServer{includeReview: includeReview, syncInterval: interval}
+	go server.broadcastLoop()
 	fetchAndUpdate(server)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/prs", server.handlePRs)
+	mux.HandleFunc("/ws", server.handleWebSocket)
 	mux.HandleFunc("/refresh", server.handleRefresh)
+	mux.HandleFunc("/config", server.handleConfig)
+	mux.HandleFunc("/group", server.handleGroup)
+	mux.HandleFunc("/shutdown", server.handleShutdown)
+
+	httpServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", httpPort),
+		Handler: mux,
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		ticker := time.NewTicker(interval)
-		for range ticker.C {
+		for range server.ticker.C {
 			fetchAndUpdate(server)
+			server.broadcastPRs()
 		}
 	}()
 
-	fmt.Printf("Daemon running on http://localhost:%d (interval: %v)\n", httpPort, interval)
+	go func() {
+		<-sigChan
+		fmt.Println("\nShutting down...")
+		httpServer.Close()
+	}()
 
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", httpPort), mux); err != nil {
+	fmt.Printf("Daemon running on :%d (interval: %v)\n", httpPort, defaultSyncInterval)
+
+	if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func (s *PRServer) handleRefresh(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+func (s *PRServer) broadcastLoop() {
+	for msg := range s.broadcast {
+		s.clientsMu.RLock()
+		for client := range s.clients {
+			err := client.WriteJSON(msg)
+			if err != nil {
+				client.Close()
+				s.clientsMu.RUnlock()
+				s.clientsMu.Lock()
+				delete(s.clients, client)
+				s.clientsMu.Unlock()
+				s.clientsMu.RLock()
+			}
+		}
+		s.clientsMu.RUnlock()
 	}
-
-	var req struct {
-		IncludeReview bool `json:"includeReview"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-
-	s.mu.Lock()
-	s.includeReview = req.IncludeReview
-	s.mu.Unlock()
-
-	fetchAndUpdate(s)
-	w.Write([]byte(`{"status":"ok"}`))
 }
 
-func (s *PRServer) handlePRs(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Content-Type", "application/json")
+func (s *PRServer) broadcastPRs() {
+	s.mu.RLock()
+	msg := Message{
+		Type: "prs",
+		Groups: []Group{
+			{URLs: s.myPRs, GroupName: groupMyPRs},
+			{URLs: s.reviewPRs, GroupName: groupReviewPRs},
+		},
+	}
+	s.mu.RUnlock()
 
-	if r.Method == http.MethodOptions {
+	select {
+	case s.broadcast <- msg:
+	default:
+	}
+}
+
+func (s *PRServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
 		return
 	}
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+	s.clientsMu.Lock()
+	s.clients[conn] = true
+	s.clientsMu.Unlock()
+
+	s.broadcastPRs()
+
+	for {
+		var msg struct {
+			Type     string   `json:"type"`
+			OpenUrls []string `json:"openUrls"`
+		}
+		err := conn.ReadJSON(&msg)
+		if err != nil {
+			s.clientsMu.Lock()
+			delete(s.clients, conn)
+			s.clientsMu.Unlock()
+			conn.Close()
+			return
+		}
+
+		if msg.Type == "tabs" {
+			s.handleTabsUpdate(conn, msg.OpenUrls)
+		}
 	}
+}
 
-	var req OpenUrlsRequest
-	json.NewDecoder(r.Body).Decode(&req)
-
-	openUrls := make(map[string]bool)
-	for _, u := range req.OpenUrls {
-		openUrls[normalizeURL(u)] = true
-	}
-
+func (s *PRServer) handleTabsUpdate(conn *websocket.Conn, openUrls []string) {
 	s.mu.RLock()
 	allPRs := make(map[string]bool)
 	for _, u := range s.myPRs {
@@ -335,13 +391,10 @@ func (s *PRServer) handlePRs(w http.ResponseWriter, r *http.Request) {
 	for _, u := range s.reviewPRs {
 		allPRs[normalizeURL(u)] = true
 	}
-
-	myPRsToOpen := filterNotOpen(s.myPRs, openUrls)
-	reviewPRsToOpen := filterNotOpen(s.reviewPRs, openUrls)
 	s.mu.RUnlock()
 
 	var toClose []string
-	for _, u := range req.OpenUrls {
+	for _, u := range openUrls {
 		if strings.Contains(u, "github.com") && strings.Contains(u, "/pull/") {
 			if !allPRs[normalizeURL(u)] {
 				toClose = append(toClose, u)
@@ -349,26 +402,136 @@ func (s *PRServer) handlePRs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := PRResponse{
-		Groups: []PRGroup{
-			{URLs: myPRsToOpen, GroupName: groupMyPRs},
-			{URLs: reviewPRsToOpen, GroupName: groupReviewPRs},
-		},
-		ToClose: toClose,
+	if len(toClose) > 0 {
+		conn.WriteJSON(Message{Type: "close", ToClose: toClose})
 	}
-	json.NewEncoder(w).Encode(resp)
+}
+
+func setCORS(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+}
+
+func (s *PRServer) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Write([]byte(`{"status":"ok"}`))
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+	}()
+}
+
+func (s *PRServer) handleConfig(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		IncludeReview *bool   `json:"includeReview"`
+		Interval      *string `json:"interval"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	if req.IncludeReview != nil {
+		s.includeReview = *req.IncludeReview
+		fmt.Printf("[%s] Review mode: %v\n", time.Now().Format("15:04:05"), s.includeReview)
+	}
+	if req.Interval != nil {
+		if dur, err := time.ParseDuration(*req.Interval); err == nil && dur > 0 {
+			s.syncInterval = dur
+			s.ticker.Reset(dur)
+			fmt.Printf("[%s] Interval: %v\n", time.Now().Format("15:04:05"), dur)
+		}
+	}
+	s.mu.Unlock()
+
+	go func() {
+		fetchAndUpdate(s)
+		s.broadcastPRs()
+	}()
+	w.Write([]byte(`{"status":"ok"}`))
+}
+
+func (s *PRServer) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	fetchAndUpdate(s)
+	s.broadcastPRs()
+	w.Write([]byte(`{"status":"ok"}`))
+}
+
+func (s *PRServer) handleGroup(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	select {
+	case s.broadcast <- Message{Type: "group"}:
+	default:
+	}
+
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func fetchAndUpdate(server *PRServer) {
-	myPRs := fetchAuthoredPRs()
+	myPRs := fetchPRs(fmt.Sprintf(`{
+		viewer {
+			pullRequests(first: %d, states: OPEN) {
+				nodes { url repository { isArchived } }
+			}
+		}
+	}`, maxPRs), func(data []byte) []PR {
+		var resp AuthoredResponse
+		json.Unmarshal(data, &resp)
+		return resp.Data.Viewer.PullRequests.Nodes
+	})
 
-	server.mu.Lock()
+	server.mu.RLock()
 	includeReview := server.includeReview
-	server.mu.Unlock()
+	server.mu.RUnlock()
 
 	var reviewPRs []string
 	if includeReview {
-		reviewPRs = fetchReviewRequests()
+		reviewPRs = fetchPRs(fmt.Sprintf(`{
+			search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: %d) {
+				nodes { ... on PullRequest { url repository { isArchived } } }
+			}
+		}`, maxPRs), func(data []byte) []PR {
+			var resp ReviewResponse
+			json.Unmarshal(data, &resp)
+			return resp.Data.Search.Nodes
+		})
 	}
 
 	server.mu.Lock()
@@ -379,56 +542,15 @@ func fetchAndUpdate(server *PRServer) {
 	fmt.Printf("[%s] %d my, %d review\n", time.Now().Format("15:04:05"), len(myPRs), len(reviewPRs))
 }
 
-func fetchAuthoredPRs() []string {
-	query := fmt.Sprintf(`{
-		viewer {
-			pullRequests(first: %d, states: OPEN) {
-				nodes { url repository { isArchived } }
-			}
-		}
-	}`, maxPRs)
-
-	output, err := runGraphQL(query)
-	if err != nil {
-		return nil
-	}
-
-	var resp AuthoredResponse
-	if err := json.Unmarshal(output, &resp); err != nil {
-		return nil
-	}
-
-	return extractURLs(resp.Data.Viewer.PullRequests.Nodes)
-}
-
-func fetchReviewRequests() []string {
-	query := fmt.Sprintf(`{
-		search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: %d) {
-			nodes { ... on PullRequest { url repository { isArchived } } }
-		}
-	}`, maxPRs)
-
-	output, err := runGraphQL(query)
-	if err != nil {
-		return nil
-	}
-
-	var resp ReviewResponse
-	if err := json.Unmarshal(output, &resp); err != nil {
-		return nil
-	}
-
-	return extractURLs(resp.Data.Search.Nodes)
-}
-
-func runGraphQL(query string) ([]byte, error) {
+func fetchPRs(query string, extract func([]byte) []PR) []string {
 	cmd := exec.Command("gh", "api", "graphql", "-f", "query="+query)
-	return cmd.Output()
-}
+	output, _ := cmd.Output()
+	if len(output) == 0 {
+		return nil
+	}
 
-func extractURLs(prs []PR) []string {
 	var urls []string
-	for _, pr := range prs {
+	for _, pr := range extract(output) {
 		if pr.URL != "" && !pr.Repository.IsArchived {
 			urls = append(urls, pr.URL)
 		}
@@ -436,19 +558,17 @@ func extractURLs(prs []PR) []string {
 	return urls
 }
 
-func filterNotOpen(urls []string, openUrls map[string]bool) []string {
-	var result []string
-	for _, u := range urls {
-		if !openUrls[normalizeURL(u)] {
-			result = append(result, u)
-		}
-	}
-	return result
+func normalizeURL(u string) string {
+	u = strings.TrimSuffix(u, "/")
+	u = strings.TrimSuffix(u, "/files")
+	u = strings.TrimSuffix(u, "/commits")
+	return u
 }
 
-func normalizeURL(url string) string {
-	url = strings.TrimSuffix(url, "/")
-	url = strings.TrimSuffix(url, "/files")
-	url = strings.TrimSuffix(url, "/commits")
-	return url
+func extractDomain(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }
