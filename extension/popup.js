@@ -2,7 +2,6 @@ const githubLogin = document.getElementById("github-login");
 const githubCode = document.getElementById("github-code");
 const githubConnected = document.getElementById("github-connected");
 const statusEl = document.getElementById("status");
-const statusDot = document.getElementById("status-dot");
 const userCodeEl = document.getElementById("user-code");
 
 async function init() {
@@ -32,29 +31,27 @@ function showGitHubConnected(daemonConnected) {
   githubLogin.classList.add("hidden");
   githubCode.classList.add("hidden");
   githubConnected.classList.remove("hidden");
-  
-  statusEl.textContent = daemonConnected ? "Using CLI daemon" : "Syncing PRs";
-  statusDot.classList.remove("offline", "warning");
+  statusEl.textContent = daemonConnected ? "Using CLI daemon" : "Connected";
 }
 
-// Tab Actions
-document.getElementById("group-btn").addEventListener("click", async () => {
-  await browser.runtime.sendMessage({ type: "groupByDomain" });
+// Tab Actions (work without GitHub)
+document.getElementById("group-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "groupByDomain" });
 });
 
-document.getElementById("ungroup-btn").addEventListener("click", async () => {
-  await browser.runtime.sendMessage({ type: "ungroupAll" });
+document.getElementById("ungroup-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "ungroupAll" });
 });
 
-document.getElementById("sort-btn").addEventListener("click", async () => {
-  await browser.runtime.sendMessage({ type: "sortTabs" });
+document.getElementById("sort-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "sortTabs" });
 });
 
-document.getElementById("close-dupes-btn").addEventListener("click", async () => {
-  await browser.runtime.sendMessage({ type: "closeDuplicates" });
+document.getElementById("close-dupes-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "closeDuplicates" });
 });
 
-// GitHub
+// GitHub Actions
 document.getElementById("login-btn").addEventListener("click", async () => {
   const result = await browser.runtime.sendMessage({ type: "login" });
   if (result.user_code) {
@@ -75,10 +72,20 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   showGitHubLogin();
 });
 
-document.getElementById("refresh-btn").addEventListener("click", async () => {
-  statusEl.textContent = "Syncing...";
-  await browser.runtime.sendMessage({ type: "refresh" });
-  setTimeout(() => init(), 500);
+document.getElementById("my-prs-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "openMyPRs" });
+});
+
+document.getElementById("review-prs-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "openReviewPRs" });
+});
+
+document.getElementById("my-issues-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "openMyIssues" });
+});
+
+document.getElementById("notifications-btn").addEventListener("click", () => {
+  browser.runtime.sendMessage({ type: "openNotifications" });
 });
 
 init();

@@ -33,7 +33,6 @@ function tryConnectDaemon() {
   ws.onclose = () => {
     daemonConnected = false;
     scheduleReconnect();
-    fallbackToStandalone();
   };
   
   ws.onerror = () => ws.close();
@@ -47,33 +46,21 @@ function scheduleReconnect() {
   }, RECONNECT_DELAY);
 }
 
-async function fallbackToStandalone() {
-  const { token } = await browser.storage.local.get("token");
-  if (token && !syncTimer) {
-    startStandaloneSync();
+// GitHub API
+async function graphql(token, query) {
+  const res = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query })
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      await browser.storage.local.remove("token");
+      console.log("Tab Grouper: token expired");
+    }
+    return null;
   }
-}
-
-function startStandaloneSync() {
-  if (syncTimer) clearInterval(syncTimer);
-  fetchAndSyncPRs();
-  syncTimer = setInterval(fetchAndSyncPRs, SYNC_INTERVAL);
-  console.log("Tab Grouper: standalone mode");
-}
-
-async function fetchAndSyncPRs() {
-  if (daemonConnected) return;
-  
-  const { token } = await browser.storage.local.get("token");
-  if (!token) return;
-
-  const myPRs = await fetchMyPRs(token);
-  const tabs = await browser.tabs.query({});
-  
-  await handlePRs([{ urls: myPRs, groupName: "My PRs" }]);
-  await autoCloseMergedPRs(tabs, myPRs);
-  
-  console.log(`Tab Grouper: ${myPRs.length} PRs`);
+  return (await res.json()).data;
 }
 
 async function fetchMyPRs(token) {
@@ -84,72 +71,66 @@ async function fetchMyPRs(token) {
     .map(pr => pr.url);
 }
 
-async function graphql(token, query) {
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query })
-  });
-  if (!res.ok) {
-    if (res.status === 401) {
-      await browser.storage.local.remove("token");
-      console.log("Tab Grouper: token expired, please re-login");
-    }
-    return null;
-  }
-  return (await res.json()).data;
+async function fetchReviewPRs(token) {
+  const query = `{ search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: 100) { nodes { ... on PullRequest { url repository { isArchived } } } } }`;
+  const data = await graphql(token, query);
+  return (data?.search?.nodes || [])
+    .filter(pr => pr.url && !pr.repository?.isArchived)
+    .map(pr => pr.url);
 }
 
+async function fetchMyIssues(token) {
+  const query = `{ search(query: "is:issue is:open assignee:@me", type: ISSUE, first: 100) { nodes { ... on Issue { url repository { isArchived } } } } }`;
+  const data = await graphql(token, query);
+  return (data?.search?.nodes || [])
+    .filter(issue => issue.url && !issue.repository?.isArchived)
+    .map(issue => issue.url);
+}
+
+async function openUrls(urls, groupName) {
+  if (!urls?.length) return;
+  
+  const win = await browser.windows.getCurrent();
+  const existingTabs = await browser.tabs.query({});
+  const existingUrls = new Set(existingTabs.map(t => normalizeUrl(t.url)));
+  const tabIds = [];
+
+  for (const url of urls) {
+    if (!existingUrls.has(normalizeUrl(url))) {
+      const tab = await browser.tabs.create({ url, active: false, windowId: win.id });
+      tabIds.push(tab.id);
+    } else {
+      const existing = existingTabs.find(t => normalizeUrl(t.url) === normalizeUrl(url));
+      if (existing) tabIds.push(existing.id);
+    }
+  }
+
+  if (tabIds.length > 0 && browser.tabs.group && groupName) {
+    try {
+      const groups = await browser.tabGroups.query({ windowId: win.id });
+      const existing = groups.find(g => g.title === groupName);
+      if (existing) {
+        await browser.tabs.group({ tabIds, groupId: existing.id });
+      } else {
+        const groupId = await browser.tabs.group({ tabIds, createProperties: { windowId: win.id } });
+        await browser.tabGroups.update(groupId, { title: groupName });
+      }
+    } catch (e) {
+      console.error("Tab Grouper: group error", e);
+    }
+  }
+}
+
+// PR handling for daemon
 async function handlePRs(groups) {
   if (!groups) return;
   const tabs = await browser.tabs.query({});
   for (const group of groups) {
-    if (group.urls?.length > 0) await organizeGroup(tabs, group.urls, group.groupName);
+    if (group.urls?.length > 0) {
+      await openUrls(group.urls, group.groupName);
+    }
   }
   sendTabsUpdate();
-}
-
-async function organizeGroup(existingTabs, urls, groupName) {
-  const win = await browser.windows.getCurrent();
-  const urlToTab = new Map(existingTabs.filter(t => t.url).map(t => [normalizeUrl(t.url), t]));
-  const tabsToGroup = [];
-
-  for (const url of urls) {
-    const tab = urlToTab.get(normalizeUrl(url));
-    if (tab) {
-      tabsToGroup.push(tab.id);
-    } else {
-      const newTab = await browser.tabs.create({ url, active: false, windowId: win.id });
-      tabsToGroup.push(newTab.id);
-    }
-  }
-
-  if (tabsToGroup.length === 0 || !browser.tabs.group) return;
-
-  try {
-    const groups = await browser.tabGroups.query({ windowId: win.id });
-    const existing = groups.find(g => g.title === groupName);
-    if (existing) {
-      await browser.tabs.group({ tabIds: tabsToGroup, groupId: existing.id });
-    } else {
-      const groupId = await browser.tabs.group({ tabIds: tabsToGroup, createProperties: { windowId: win.id } });
-      await browser.tabGroups.update(groupId, { title: groupName });
-    }
-  } catch (e) {
-    console.error("Tab Grouper: group error", e);
-  }
-}
-
-async function autoCloseMergedPRs(tabs, activePRs) {
-  const activeSet = new Set(activePRs.map(normalizeUrl));
-  const toClose = tabs.filter(t => 
-    t.url?.includes("github.com") && 
-    t.url?.includes("/pull/") && 
-    !activeSet.has(normalizeUrl(t.url))
-  );
-  if (toClose.length > 0) {
-    await browser.tabs.remove(toClose.map(t => t.id));
-  }
 }
 
 async function closeTabs(urls) {
@@ -160,6 +141,7 @@ async function closeTabs(urls) {
   if (toClose.length > 0) await browser.tabs.remove(toClose.map(t => t.id));
 }
 
+// Tab Actions (no GitHub needed)
 async function groupTabsByDomain() {
   if (!browser.tabs.group) {
     console.log("Tab Grouper: tabs.group API not available");
@@ -261,7 +243,9 @@ function normalizeUrl(url) {
   return url.replace(/\/$/, "").replace(/\/(files|commits)$/, "");
 }
 
+// Message handler
 browser.runtime.onMessage.addListener(async (msg) => {
+  // GitHub auth
   if (msg.type === "login") return startDeviceFlow();
   if (msg.type === "logout") {
     await browser.storage.local.remove("token");
@@ -273,11 +257,8 @@ browser.runtime.onMessage.addListener(async (msg) => {
     const { token } = await browser.storage.local.get("token");
     return { loggedIn: !!token, daemonConnected };
   }
-  if (msg.type === "refresh") {
-    if (daemonConnected) return { ok: true };
-    await fetchAndSyncPRs();
-    return { ok: true };
-  }
+  
+  // Tab actions (no GitHub needed)
   if (msg.type === "groupByDomain") {
     await groupTabsByDomain();
     return { ok: true };
@@ -294,6 +275,30 @@ browser.runtime.onMessage.addListener(async (msg) => {
     await closeDuplicateTabs();
     return { ok: true };
   }
+  
+  // GitHub actions (need token)
+  const { token } = await browser.storage.local.get("token");
+  if (!token) return { error: "Not logged in" };
+  
+  if (msg.type === "openMyPRs") {
+    const prs = await fetchMyPRs(token);
+    await openUrls(prs, "My PRs");
+    return { ok: true, count: prs.length };
+  }
+  if (msg.type === "openReviewPRs") {
+    const prs = await fetchReviewPRs(token);
+    await openUrls(prs, "Review PRs");
+    return { ok: true, count: prs.length };
+  }
+  if (msg.type === "openMyIssues") {
+    const issues = await fetchMyIssues(token);
+    await openUrls(issues, "My Issues");
+    return { ok: true, count: issues.length };
+  }
+  if (msg.type === "openNotifications") {
+    await browser.tabs.create({ url: "https://github.com/notifications" });
+    return { ok: true };
+  }
 });
 
 async function startDeviceFlow() {
@@ -302,7 +307,11 @@ async function startDeviceFlow() {
     headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
     body: `client_id=${GITHUB_CLIENT_ID}&scope=repo read:org`
   });
-  const { device_code, user_code, verification_uri, interval } = await codeRes.json();
+  const { device_code, user_code, verification_uri, interval, error } = await codeRes.json();
+  
+  if (error) {
+    return { error };
+  }
   
   browser.tabs.create({ url: verification_uri });
   
@@ -317,7 +326,6 @@ async function startDeviceFlow() {
       const data = await tokenRes.json();
       if (data.access_token) {
         await browser.storage.local.set({ token: data.access_token });
-        if (!daemonConnected) startStandaloneSync();
         return { ok: true };
       }
       if (data.error === "expired_token") return { error: "expired" };
