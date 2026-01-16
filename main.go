@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -24,7 +23,6 @@ const (
 	httpPort            = 19222
 	defaultSyncInterval = 15 * time.Second
 	groupMyPRs          = "My PRs"
-	groupReviewPRs      = "Review PRs"
 	launchdLabel        = "com.tab-grouper.daemon"
 	systemdService      = "tab-grouper"
 )
@@ -52,14 +50,6 @@ type AuthoredResponse struct {
 	} `json:"data"`
 }
 
-type ReviewResponse struct {
-	Data struct {
-		Search struct {
-			Nodes []PR `json:"nodes"`
-		} `json:"search"`
-	} `json:"data"`
-}
-
 type Group struct {
 	URLs      []string `json:"urls"`
 	GroupName string   `json:"groupName"`
@@ -72,15 +62,13 @@ type Message struct {
 }
 
 type PRServer struct {
-	mu            sync.RWMutex
-	myPRs         []string
-	reviewPRs     []string
-	includeReview bool
-	syncInterval  time.Duration
-	ticker        *time.Ticker
-	clients       map[*websocket.Conn]bool
-	clientsMu     sync.RWMutex
-	broadcast     chan Message
+	mu           sync.RWMutex
+	myPRs        []string
+	syncInterval time.Duration
+	ticker       *time.Ticker
+	clients      map[*websocket.Conn]bool
+	clientsMu    sync.RWMutex
+	broadcast    chan Message
 }
 
 func main() {
@@ -89,9 +77,6 @@ func main() {
 	shutdownCmd := flag.Bool("shutdown", false, "Shutdown running daemon")
 	refreshCmd := flag.Bool("refresh", false, "Trigger immediate refresh")
 	groupCmd := flag.Bool("group", false, "Group all tabs by domain")
-	enableReviewCmd := flag.Bool("enable-review", false, "Enable review mode")
-	disableReviewCmd := flag.Bool("disable-review", false, "Disable review mode")
-	setIntervalCmd := flag.Duration("set-interval", 0, "Update sync interval")
 	flag.Parse()
 
 	switch {
@@ -103,12 +88,6 @@ func main() {
 		postToEndpoint("/refresh", nil, "Refreshed")
 	case *groupCmd:
 		postToEndpoint("/group", nil, "Grouping tabs by domain")
-	case *enableReviewCmd:
-		postToEndpoint("/config", map[string]any{"includeReview": true}, "Review mode enabled")
-	case *disableReviewCmd:
-		postToEndpoint("/config", map[string]any{"includeReview": false}, "Review mode disabled")
-	case *setIntervalCmd > 0:
-		postToEndpoint("/config", map[string]any{"interval": setIntervalCmd.String()}, fmt.Sprintf("Interval updated to %s", *setIntervalCmd))
 	case *daemonMode:
 		runDaemon()
 	default:
@@ -339,7 +318,6 @@ func (s *PRServer) broadcastPRs() {
 		Type: "prs",
 		Groups: []Group{
 			{URLs: s.myPRs, GroupName: groupMyPRs},
-			{URLs: s.reviewPRs, GroupName: groupReviewPRs},
 		},
 	}
 	s.mu.RUnlock()
@@ -386,9 +364,6 @@ func (s *PRServer) handleTabsUpdate(conn *websocket.Conn, openUrls []string) {
 	s.mu.RLock()
 	allPRs := make(map[string]bool)
 	for _, u := range s.myPRs {
-		allPRs[normalizeURL(u)] = true
-	}
-	for _, u := range s.reviewPRs {
 		allPRs[normalizeURL(u)] = true
 	}
 	s.mu.RUnlock()
@@ -442,8 +417,7 @@ func (s *PRServer) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		IncludeReview *bool   `json:"includeReview"`
-		Interval      *string `json:"interval"`
+		Interval *string `json:"interval"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -451,10 +425,6 @@ func (s *PRServer) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mu.Lock()
-	if req.IncludeReview != nil {
-		s.includeReview = *req.IncludeReview
-		fmt.Printf("[%s] Review mode: %v\n", time.Now().Format("15:04:05"), s.includeReview)
-	}
 	if req.Interval != nil {
 		if dur, err := time.ParseDuration(*req.Interval); err == nil && dur > 0 {
 			s.syncInterval = dur
@@ -517,29 +487,11 @@ func fetchAndUpdate(server *PRServer) {
 		return resp.Data.Viewer.PullRequests.Nodes
 	})
 
-	server.mu.RLock()
-	includeReview := server.includeReview
-	server.mu.RUnlock()
-
-	var reviewPRs []string
-	if includeReview {
-		reviewPRs = fetchPRs(fmt.Sprintf(`{
-			search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: %d) {
-				nodes { ... on PullRequest { url repository { isArchived } } }
-			}
-		}`, maxPRs), func(data []byte) []PR {
-			var resp ReviewResponse
-			json.Unmarshal(data, &resp)
-			return resp.Data.Search.Nodes
-		})
-	}
-
 	server.mu.Lock()
 	server.myPRs = myPRs
-	server.reviewPRs = reviewPRs
 	server.mu.Unlock()
 
-	fmt.Printf("[%s] %d my, %d review\n", time.Now().Format("15:04:05"), len(myPRs), len(reviewPRs))
+	fmt.Printf("[%s] %d PRs\n", time.Now().Format("15:04:05"), len(myPRs))
 }
 
 func fetchPRs(query string, extract func([]byte) []PR) []string {
@@ -563,12 +515,4 @@ func normalizeURL(u string) string {
 	u = strings.TrimSuffix(u, "/files")
 	u = strings.TrimSuffix(u, "/commits")
 	return u
-}
-
-func extractDomain(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	return u.Hostname()
 }

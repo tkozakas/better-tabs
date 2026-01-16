@@ -6,34 +6,40 @@ const RECONNECT_DELAY = 3000;
 let ws = null;
 let reconnectTimer = null;
 let syncTimer = null;
-let config = { includeReview: false, useDaemon: false };
+let daemonConnected = false;
+let config = { includeReview: false };
 
 async function init() {
   const stored = await browser.storage.local.get(["token", "config"]);
   if (stored.config) config = stored.config;
   
-  if (config.useDaemon) {
-    connectWebSocket();
-  } else if (stored.token) {
-    startStandaloneSync();
-  }
+  tryConnectDaemon();
 }
 
-function connectWebSocket() {
-  if (ws?.readyState === WebSocket.OPEN) return;
-  
+function tryConnectDaemon() {
   ws = new WebSocket(WS_URL);
+  
   ws.onopen = () => {
+    daemonConnected = true;
+    if (syncTimer) clearInterval(syncTimer);
+    syncTimer = null;
     console.log("Tab Grouper: daemon connected");
     sendTabsUpdate();
   };
+  
   ws.onmessage = async (e) => {
     const data = JSON.parse(e.data);
     if (data.type === "prs") await handlePRs(data.groups);
     else if (data.type === "close") await closeTabs(data.toClose);
     else if (data.type === "group") await groupTabsByDomain();
   };
-  ws.onclose = () => scheduleReconnect();
+  
+  ws.onclose = () => {
+    daemonConnected = false;
+    scheduleReconnect();
+    fallbackToStandalone();
+  };
+  
   ws.onerror = () => ws.close();
 }
 
@@ -41,18 +47,27 @@ function scheduleReconnect() {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    if (config.useDaemon) connectWebSocket();
+    tryConnectDaemon();
   }, RECONNECT_DELAY);
+}
+
+async function fallbackToStandalone() {
+  const { token } = await browser.storage.local.get("token");
+  if (token && !syncTimer) {
+    startStandaloneSync();
+  }
 }
 
 function startStandaloneSync() {
   if (syncTimer) clearInterval(syncTimer);
   fetchAndSyncPRs();
   syncTimer = setInterval(fetchAndSyncPRs, SYNC_INTERVAL);
-  console.log("Tab Grouper: standalone mode started");
+  console.log("Tab Grouper: standalone mode");
 }
 
 async function fetchAndSyncPRs() {
+  if (daemonConnected) return;
+  
   const { token } = await browser.storage.local.get("token");
   if (!token) return;
 
@@ -221,26 +236,15 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
   if (msg.type === "getStatus") {
     const { token } = await browser.storage.local.get("token");
-    return { loggedIn: !!token, config };
+    return { loggedIn: !!token, daemonConnected, config };
   }
   if (msg.type === "setConfig") {
     config = { ...config, ...msg.config };
     await browser.storage.local.set({ config });
-    if (config.useDaemon) {
-      if (syncTimer) clearInterval(syncTimer);
-      syncTimer = null;
-      connectWebSocket();
-    } else {
-      if (ws) ws.close();
-      const { token } = await browser.storage.local.get("token");
-      if (token) startStandaloneSync();
-    }
     return { ok: true };
   }
   if (msg.type === "refresh") {
-    if (config.useDaemon && ws?.readyState === WebSocket.OPEN) {
-      return { ok: true };
-    }
+    if (daemonConnected) return { ok: true };
     await fetchAndSyncPRs();
     return { ok: true };
   }
@@ -271,7 +275,7 @@ async function startDeviceFlow() {
       const data = await tokenRes.json();
       if (data.access_token) {
         await browser.storage.local.set({ token: data.access_token });
-        startStandaloneSync();
+        if (!daemonConnected) startStandaloneSync();
         return { ok: true };
       }
       if (data.error === "expired_token") return { error: "expired" };

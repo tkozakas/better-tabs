@@ -5,10 +5,10 @@ const statusEl = document.getElementById("status");
 const userCodeEl = document.getElementById("user-code");
 
 async function init() {
-  const { loggedIn, config } = await browser.runtime.sendMessage({ type: "getStatus" });
+  const { loggedIn, daemonConnected, config } = await browser.runtime.sendMessage({ type: "getStatus" });
   
-  if (loggedIn || config.useDaemon) {
-    showMain(config);
+  if (loggedIn || daemonConnected) {
+    showMain(daemonConnected, config);
   } else {
     showLogin();
   }
@@ -27,14 +27,13 @@ function showCode(code) {
   userCodeEl.textContent = code;
 }
 
-function showMain(config) {
+function showMain(daemonConnected, config) {
   loginView.classList.add("hidden");
   codeView.classList.add("hidden");
   mainView.classList.remove("hidden");
   
   document.getElementById("review-toggle").checked = config.includeReview;
-  document.getElementById("daemon-toggle").checked = config.useDaemon;
-  statusEl.textContent = config.useDaemon ? "Using CLI daemon" : "Standalone mode";
+  statusEl.textContent = daemonConnected ? "Connected to CLI daemon" : "Standalone mode";
 }
 
 document.getElementById("login-btn").addEventListener("click", async () => {
@@ -43,8 +42,8 @@ document.getElementById("login-btn").addEventListener("click", async () => {
     showCode(result.user_code);
     const pollResult = await result.pollPromise;
     if (pollResult.ok) {
-      const { config } = await browser.runtime.sendMessage({ type: "getStatus" });
-      showMain(config);
+      const { daemonConnected, config } = await browser.runtime.sendMessage({ type: "getStatus" });
+      showMain(daemonConnected, config);
     } else {
       showLogin();
       alert("Login failed: " + (pollResult.error || "unknown error"));
@@ -71,11 +70,6 @@ document.getElementById("group-btn").addEventListener("click", () => {
 
 document.getElementById("review-toggle").addEventListener("change", (e) => {
   browser.runtime.sendMessage({ type: "setConfig", config: { includeReview: e.target.checked } });
-});
-
-document.getElementById("daemon-toggle").addEventListener("change", async (e) => {
-  await browser.runtime.sendMessage({ type: "setConfig", config: { useDaemon: e.target.checked } });
-  init();
 });
 
 init();
