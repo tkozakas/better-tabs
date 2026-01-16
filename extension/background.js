@@ -7,12 +7,8 @@ let ws = null;
 let reconnectTimer = null;
 let syncTimer = null;
 let daemonConnected = false;
-let config = { includeReview: false };
 
 async function init() {
-  const stored = await browser.storage.local.get(["token", "config"]);
-  if (stored.config) config = stored.config;
-  
   tryConnectDaemon();
 }
 
@@ -72,30 +68,18 @@ async function fetchAndSyncPRs() {
   if (!token) return;
 
   const myPRs = await fetchMyPRs(token);
-  const reviewPRs = config.includeReview ? await fetchReviewPRs(token) : [];
-  
   const tabs = await browser.tabs.query({});
-  await handlePRs([
-    { urls: myPRs, groupName: "My PRs" },
-    { urls: reviewPRs, groupName: "Review PRs" }
-  ]);
   
-  await autoCloseMergedPRs(tabs, [...myPRs, ...reviewPRs]);
-  console.log(`Tab Grouper: ${myPRs.length} my, ${reviewPRs.length} review`);
+  await handlePRs([{ urls: myPRs, groupName: "My PRs" }]);
+  await autoCloseMergedPRs(tabs, myPRs);
+  
+  console.log(`Tab Grouper: ${myPRs.length} PRs`);
 }
 
 async function fetchMyPRs(token) {
   const query = `{ viewer { pullRequests(first: 100, states: OPEN) { nodes { url repository { isArchived } } } } }`;
   const data = await graphql(token, query);
   return (data?.viewer?.pullRequests?.nodes || [])
-    .filter(pr => pr.url && !pr.repository?.isArchived)
-    .map(pr => pr.url);
-}
-
-async function fetchReviewPRs(token) {
-  const query = `{ search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: 100) { nodes { ... on PullRequest { url repository { isArchived } } } } }`;
-  const data = await graphql(token, query);
-  return (data?.search?.nodes || [])
     .filter(pr => pr.url && !pr.repository?.isArchived)
     .map(pr => pr.url);
 }
@@ -236,12 +220,7 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
   if (msg.type === "getStatus") {
     const { token } = await browser.storage.local.get("token");
-    return { loggedIn: !!token, daemonConnected, config };
-  }
-  if (msg.type === "setConfig") {
-    config = { ...config, ...msg.config };
-    await browser.storage.local.set({ config });
-    return { ok: true };
+    return { loggedIn: !!token, daemonConnected };
   }
   if (msg.type === "refresh") {
     if (daemonConnected) return { ok: true };
