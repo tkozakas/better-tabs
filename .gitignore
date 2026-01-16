@@ -1,0 +1,16 @@
+# Binary
+pr-aggregator
+
+# Extension artifacts
+extension/web-ext-artifacts/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

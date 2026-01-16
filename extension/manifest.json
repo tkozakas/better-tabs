@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "PR Tab Grouper",
+  "version": "1.0.2",
+  "description": "Groups GitHub PR tabs automatically",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "http://localhost/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "pr-tab-grouper@localhost",
+      "strict_min_version": "131.0"
+    }
+  }
+}
