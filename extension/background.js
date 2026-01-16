@@ -1,6 +1,6 @@
 const GITHUB_CLIENT_ID = "Ov23liY8IFluEgbiTfhC";
 const WS_URL = "ws://localhost:19222/ws";
-const SYNC_INTERVAL = 15000;
+const SYNC_INTERVAL = 300000;
 const RECONNECT_DELAY = 3000;
 
 let ws = null;
