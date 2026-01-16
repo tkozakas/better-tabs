@@ -198,6 +198,57 @@ async function groupTabsByDomain() {
   console.log("Tab Grouper: grouped", domainTabs.size, "domains");
 }
 
+async function ungroupAllTabs() {
+  if (!browser.tabs.ungroup) {
+    console.log("Tab Grouper: tabs.ungroup API not available");
+    return;
+  }
+
+  const tabs = await browser.tabs.query({ currentWindow: true });
+  const groupedTabs = tabs.filter(t => t.groupId && t.groupId !== -1);
+  
+  if (groupedTabs.length > 0) {
+    await browser.tabs.ungroup(groupedTabs.map(t => t.id));
+  }
+  console.log("Tab Grouper: ungrouped", groupedTabs.length, "tabs");
+}
+
+async function sortTabsAlphabetically() {
+  const tabs = await browser.tabs.query({ currentWindow: true });
+  const sortable = tabs.filter(t => !t.pinned && t.url);
+  
+  sortable.sort((a, b) => {
+    const hostA = new URL(a.url).hostname;
+    const hostB = new URL(b.url).hostname;
+    return hostA.localeCompare(hostB) || a.url.localeCompare(b.url);
+  });
+
+  for (let i = 0; i < sortable.length; i++) {
+    await browser.tabs.move(sortable[i].id, { index: -1 });
+  }
+  console.log("Tab Grouper: sorted", sortable.length, "tabs");
+}
+
+async function closeDuplicateTabs() {
+  const tabs = await browser.tabs.query({ currentWindow: true });
+  const seen = new Set();
+  const toClose = [];
+
+  for (const tab of tabs) {
+    const normalized = normalizeUrl(tab.url);
+    if (seen.has(normalized)) {
+      toClose.push(tab.id);
+    } else {
+      seen.add(normalized);
+    }
+  }
+
+  if (toClose.length > 0) {
+    await browser.tabs.remove(toClose);
+  }
+  console.log("Tab Grouper: closed", toClose.length, "duplicates");
+}
+
 function sendTabsUpdate() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   browser.tabs.query({}).then(tabs => {
@@ -229,6 +280,18 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
   if (msg.type === "groupByDomain") {
     await groupTabsByDomain();
+    return { ok: true };
+  }
+  if (msg.type === "ungroupAll") {
+    await ungroupAllTabs();
+    return { ok: true };
+  }
+  if (msg.type === "sortTabs") {
+    await sortTabsAlphabetically();
+    return { ok: true };
+  }
+  if (msg.type === "closeDuplicates") {
+    await closeDuplicateTabs();
     return { ok: true };
   }
 });

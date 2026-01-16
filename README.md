@@ -1,12 +1,20 @@
 # Tab Grouper
 
-Sync GitHub PRs to browser tabs with automatic tab grouping.
+Manage browser tabs: group by domain, sort, close duplicates, and sync GitHub PRs.
 
 ## Install
 
 ```bash
 ./install.sh
 ```
+
+## Features
+
+- **Group by Domain** - Organize tabs into groups by website
+- **Ungroup All** - Remove all tab groups
+- **Sort Alphabetically** - Sort tabs by URL
+- **Close Duplicates** - Remove duplicate tabs
+- **GitHub PR Sync** - Auto-open your open PRs as tabs
 
 ## CLI (Optional)
 

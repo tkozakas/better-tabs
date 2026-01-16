@@ -1,6 +1,6 @@
-const loginView = document.getElementById("login-view");
-const codeView = document.getElementById("code-view");
-const mainView = document.getElementById("main-view");
+const githubLogin = document.getElementById("github-login");
+const githubCode = document.getElementById("github-code");
+const githubConnected = document.getElementById("github-connected");
 const statusEl = document.getElementById("status");
 const statusDot = document.getElementById("status-dot");
 const userCodeEl = document.getElementById("user-code");
@@ -9,49 +9,62 @@ async function init() {
   const { loggedIn, daemonConnected } = await browser.runtime.sendMessage({ type: "getStatus" });
   
   if (loggedIn || daemonConnected) {
-    showMain(daemonConnected);
+    showGitHubConnected(daemonConnected);
   } else {
-    showLogin();
+    showGitHubLogin();
   }
 }
 
-function showLogin() {
-  loginView.classList.remove("hidden");
-  codeView.classList.add("hidden");
-  mainView.classList.add("hidden");
+function showGitHubLogin() {
+  githubLogin.classList.remove("hidden");
+  githubCode.classList.add("hidden");
+  githubConnected.classList.add("hidden");
 }
 
-function showCode(code) {
-  loginView.classList.add("hidden");
-  codeView.classList.remove("hidden");
-  mainView.classList.add("hidden");
+function showGitHubCode(code) {
+  githubLogin.classList.add("hidden");
+  githubCode.classList.remove("hidden");
+  githubConnected.classList.add("hidden");
   userCodeEl.textContent = code;
 }
 
-function showMain(daemonConnected) {
-  loginView.classList.add("hidden");
-  codeView.classList.add("hidden");
-  mainView.classList.remove("hidden");
+function showGitHubConnected(daemonConnected) {
+  githubLogin.classList.add("hidden");
+  githubCode.classList.add("hidden");
+  githubConnected.classList.remove("hidden");
   
-  if (daemonConnected) {
-    statusEl.textContent = "Connected to daemon";
-    statusDot.classList.remove("offline");
-  } else {
-    statusEl.textContent = "Standalone mode";
-    statusDot.classList.remove("offline");
-  }
+  statusEl.textContent = daemonConnected ? "Using CLI daemon" : "Syncing PRs";
+  statusDot.classList.remove("offline", "warning");
 }
 
+// Tab Actions
+document.getElementById("group-btn").addEventListener("click", async () => {
+  await browser.runtime.sendMessage({ type: "groupByDomain" });
+});
+
+document.getElementById("ungroup-btn").addEventListener("click", async () => {
+  await browser.runtime.sendMessage({ type: "ungroupAll" });
+});
+
+document.getElementById("sort-btn").addEventListener("click", async () => {
+  await browser.runtime.sendMessage({ type: "sortTabs" });
+});
+
+document.getElementById("close-dupes-btn").addEventListener("click", async () => {
+  await browser.runtime.sendMessage({ type: "closeDuplicates" });
+});
+
+// GitHub
 document.getElementById("login-btn").addEventListener("click", async () => {
   const result = await browser.runtime.sendMessage({ type: "login" });
   if (result.user_code) {
-    showCode(result.user_code);
+    showGitHubCode(result.user_code);
     const pollResult = await result.pollPromise;
     if (pollResult.ok) {
       const { daemonConnected } = await browser.runtime.sendMessage({ type: "getStatus" });
-      showMain(daemonConnected);
+      showGitHubConnected(daemonConnected);
     } else {
-      showLogin();
+      showGitHubLogin();
       alert("Login failed: " + (pollResult.error || "unknown error"));
     }
   }
@@ -59,18 +72,12 @@ document.getElementById("login-btn").addEventListener("click", async () => {
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
   await browser.runtime.sendMessage({ type: "logout" });
-  showLogin();
+  showGitHubLogin();
 });
 
 document.getElementById("refresh-btn").addEventListener("click", async () => {
-  statusEl.textContent = "Refreshing...";
+  statusEl.textContent = "Syncing...";
   await browser.runtime.sendMessage({ type: "refresh" });
-  setTimeout(() => init(), 500);
-});
-
-document.getElementById("group-btn").addEventListener("click", async () => {
-  statusEl.textContent = "Grouping...";
-  await browser.runtime.sendMessage({ type: "groupByDomain" });
   setTimeout(() => init(), 500);
 });
 
