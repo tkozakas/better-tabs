@@ -1,21 +1,26 @@
-const GROUP_COLORS = ["blue", "turquoise", "green", "yellow", "orange", "red", "pink", "purple"];
+const GROUP_COLORS = ["blue", "cyan", "green", "yellow", "orange", "red", "pink", "purple"];
 const POLL_URL = "http://localhost:19222/prs";
 const POLL_INTERVAL_MS = 1000;
-const CONTENT_TYPE_JSON = "application/json";
+
+const api = typeof browser !== "undefined" ? browser : chrome;
 
 async function pollForPRs() {
   try {
-    const existingTabs = await browser.tabs.query({});
+    const existingTabs = await api.tabs.query({});
     const openUrls = existingTabs.map(t => t.url).filter(Boolean);
 
     const response = await fetch(POLL_URL, {
       method: "POST",
-      headers: { "Content-Type": CONTENT_TYPE_JSON },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ openUrls })
     });
     if (!response.ok) return;
 
     const data = await response.json();
+
+    if (data.toClose && data.toClose.length > 0) {
+      await closeUrls(existingTabs, data.toClose);
+    }
 
     if (data.groups) {
       for (const group of data.groups) {
@@ -23,23 +28,26 @@ async function pollForPRs() {
           await openUrlsInGroup(group.urls, group.groupName);
         }
       }
-      return;
-    }
-
-    if (data.urls && data.urls.length > 0) {
-      await openUrlsInGroup(data.urls, data.groupName || "PRs");
     }
   } catch (e) {}
 }
 
+async function closeUrls(tabs, urlsToClose) {
+  const normalized = new Set(urlsToClose.map(normalizeUrl));
+  const tabsToClose = tabs.filter(t => normalized.has(normalizeUrl(t.url)));
+  if (tabsToClose.length > 0) {
+    await api.tabs.remove(tabsToClose.map(t => t.id));
+  }
+}
+
 async function openUrlsInGroup(urls, groupName) {
-  const currentWindow = await browser.windows.getCurrent();
-  const existingGroups = await browser.tabGroups.query({ windowId: currentWindow.id });
+  const currentWindow = await api.windows.getCurrent();
+  const existingGroups = await api.tabGroups.query({ windowId: currentWindow.id });
   const targetGroup = existingGroups.find(g => g.title === groupName);
 
   const newTabs = [];
   for (const url of urls) {
-    const tab = await browser.tabs.create({
+    const tab = await api.tabs.create({
       url,
       active: false,
       windowId: currentWindow.id
@@ -52,17 +60,22 @@ async function openUrlsInGroup(urls, groupName) {
   const tabIds = newTabs.map(t => t.id);
 
   if (targetGroup) {
-    await browser.tabs.group({ tabIds, groupId: targetGroup.id });
+    await api.tabs.group({ tabIds, groupId: targetGroup.id });
   } else {
-    const groupId = await browser.tabs.group({ tabIds });
+    const groupId = await api.tabs.group({ tabIds, createProperties: { windowId: currentWindow.id } });
     const colorIndex = existingGroups.length % GROUP_COLORS.length;
-    await browser.tabGroups.update(groupId, {
+    await api.tabGroups.update(groupId, {
       title: groupName,
       color: GROUP_COLORS[colorIndex]
     });
   }
 
   return newTabs;
+}
+
+function normalizeUrl(url) {
+  if (!url) return "";
+  return url.replace(/\/$/, "").replace(/\/(files|commits)$/, "");
 }
 
 setInterval(pollForPRs, POLL_INTERVAL_MS);

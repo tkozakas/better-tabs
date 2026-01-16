@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Tab Grouper",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Groups browser tabs automatically via CLI",
   "permissions": [
     "tabs",
@@ -15,7 +15,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "pr-tab-grouper@localhost",
-      "strict_min_version": "131.0"
+      "strict_min_version": "139.0"
     }
   }
 }
