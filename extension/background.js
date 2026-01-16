@@ -181,18 +181,30 @@ async function groupTabsByDomain() {
 }
 
 async function ungroupAllTabs() {
-  if (!browser.tabs.ungroup) {
-    console.log("Tab Grouper: tabs.ungroup API not available");
+  const tabs = await browser.tabs.query({ currentWindow: true });
+  const groupedTabs = tabs.filter(t => t.groupId && t.groupId !== -1 && t.groupId !== browser.tabs.TAB_ID_NONE);
+  
+  if (groupedTabs.length === 0) {
+    console.log("Tab Grouper: no grouped tabs found");
     return;
   }
 
-  const tabs = await browser.tabs.query({ currentWindow: true });
-  const groupedTabs = tabs.filter(t => t.groupId && t.groupId !== -1);
-  
-  if (groupedTabs.length > 0) {
-    await browser.tabs.ungroup(groupedTabs.map(t => t.id));
+  if (browser.tabs.ungroup) {
+    try {
+      await browser.tabs.ungroup(groupedTabs.map(t => t.id));
+      console.log("Tab Grouper: ungrouped", groupedTabs.length, "tabs");
+    } catch (e) {
+      console.error("Tab Grouper: ungroup error", e);
+    }
+  } else {
+    // Fallback: move tabs outside their groups
+    for (const tab of groupedTabs) {
+      try {
+        await browser.tabs.move(tab.id, { index: -1 });
+      } catch (e) {}
+    }
+    console.log("Tab Grouper: moved", groupedTabs.length, "tabs out of groups");
   }
-  console.log("Tab Grouper: ungrouped", groupedTabs.length, "tabs");
 }
 
 async function sortTabsAlphabetically() {
