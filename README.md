@@ -1,27 +1,19 @@
-# pr-aggregator
+# tab-grouper
 
-Fetch and open your GitHub PRs in browser with tab grouping.
+Sync GitHub PRs to Firefox with automatic tab grouping.
 
 ## Setup
 
 ```bash
-go build -o pr-aggregator
-gh auth refresh -h github.com -s read:org,repo
 ./install.sh
+gh auth refresh -h github.com -s read:org,repo
 ```
 
 ## Usage
 
 ```bash
-./pr-aggregator                 # list your open PRs
-./pr-aggregator -review         # list PRs pending your review
-./pr-aggregator -open           # open PRs in "My PRs" group
-./pr-aggregator -review -open   # open PRs in "Review PRs" group
+./tab-grouper -daemon            # sync my PRs
+./tab-grouper -daemon -review    # sync my PRs + review requests
+./tab-grouper -refresh           # trigger immediate refresh
+./tab-grouper -refresh -review   # refresh with review PRs
 ```
-
-## Flags
-
-| Flag | Description |
-|------|-------------|
-| `-open` | Open PRs in browser (skips already open) |
-| `-review` | Show PRs where you are requested as reviewer |

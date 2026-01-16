@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "PR Tab Grouper",
-  "version": "1.0.2",
-  "description": "Groups GitHub PR tabs automatically",
+  "name": "Tab Grouper",
+  "version": "1.0.5",
+  "description": "Groups browser tabs automatically via CLI",
   "permissions": [
     "tabs",
     "tabGroups",

@@ -1,16 +1,4 @@
-# Binary
-pr-aggregator
-
-# Extension artifacts
+tab-grouper
 extension/web-ext-artifacts/
-
-# Environment
 .env
-.env.*
-
-# OS
 .DS_Store
-
-# IDE
-.idea/
-.vscode/
