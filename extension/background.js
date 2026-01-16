@@ -1,4 +1,4 @@
-const GITHUB_CLIENT_ID = "Ov23liYd6mLPxnmVvxpD";
+const GITHUB_CLIENT_ID = "Ov23liY8IFluEgbiTfhC";
 const WS_URL = "ws://localhost:19222/ws";
 const SYNC_INTERVAL = 15000;
 const RECONNECT_DELAY = 3000;
