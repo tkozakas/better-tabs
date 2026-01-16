@@ -18,3 +18,4 @@ Sync GitHub PRs to browser tabs with automatic tab grouping.
 ```
 
 Requires `gh` CLI authenticated (`gh auth login`).
+# Test PR 2
