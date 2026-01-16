@@ -181,31 +181,35 @@ async function groupTabsByDomain() {
 }
 
 async function ungroupAllTabs() {
-  const tabs = await browser.tabs.query({ currentWindow: true });
-  console.log("Tab Grouper: checking tabs for groups", tabs.map(t => ({ id: t.id, groupId: t.groupId, url: t.url?.substring(0, 50) })));
+  const win = await browser.windows.getCurrent();
   
-  // groupId is -1 when not in a group
-  const groupedTabs = tabs.filter(t => typeof t.groupId === 'number' && t.groupId !== -1);
-  
-  if (groupedTabs.length === 0) {
-    console.log("Tab Grouper: no grouped tabs found");
+  if (!browser.tabGroups) {
+    console.log("Tab Grouper: tabGroups API not available");
     return;
   }
 
-  console.log("Tab Grouper: found", groupedTabs.length, "grouped tabs");
-
-  if (browser.tabs.ungroup) {
-    try {
-      const tabIds = groupedTabs.map(t => t.id);
-      console.log("Tab Grouper: ungrouping tab IDs", tabIds);
-      await browser.tabs.ungroup(tabIds);
-      console.log("Tab Grouper: ungrouped", groupedTabs.length, "tabs");
-    } catch (e) {
-      console.error("Tab Grouper: ungroup error", e);
-    }
-  } else {
-    console.log("Tab Grouper: tabs.ungroup not available");
+  const groups = await browser.tabGroups.query({ windowId: win.id });
+  
+  if (groups.length === 0) {
+    console.log("Tab Grouper: no groups found");
+    return;
   }
+
+  console.log("Tab Grouper: removing", groups.length, "groups");
+
+  for (const group of groups) {
+    try {
+      // Get tabs in this group and ungroup them
+      const tabs = await browser.tabs.query({ groupId: group.id });
+      if (tabs.length > 0 && browser.tabs.ungroup) {
+        await browser.tabs.ungroup(tabs.map(t => t.id));
+      }
+    } catch (e) {
+      console.error("Tab Grouper: error removing group", group.id, e);
+    }
+  }
+  
+  console.log("Tab Grouper: removed all groups");
 }
 
 async function sortTabsAlphabetically() {
