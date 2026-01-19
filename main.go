@@ -21,7 +21,7 @@ import (
 const (
 	maxPRs              = 100
 	httpPort            = 19222
-	defaultSyncInterval = 5 * time.Minute
+	defaultSyncInterval = 15 * time.Second
 	groupMyPRs          = "My PRs"
 	launchdLabel        = "com.tab-grouper.daemon"
 	systemdService      = "tab-grouper"

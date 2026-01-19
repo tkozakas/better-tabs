@@ -1,6 +1,6 @@
 const GITHUB_CLIENT_ID = "Ov23liY8IFluEgbiTfhC";
 const WS_URL = "ws://localhost:19222/ws";
-const SYNC_INTERVAL = 300000;
+const SYNC_INTERVAL = 15000;
 const RECONNECT_DELAY = 3000;
 
 let ws = null;
@@ -46,7 +46,6 @@ function scheduleReconnect() {
   }, RECONNECT_DELAY);
 }
 
-// GitHub API
 async function graphql(token, query) {
   const res = await fetch("https://api.github.com/graphql", {
     method: "POST",
@@ -121,7 +120,6 @@ async function openUrls(urls, groupName) {
   }
 }
 
-// PR handling for daemon
 async function handlePRs(groups) {
   if (!groups) return;
   const tabs = await browser.tabs.query({});
@@ -137,11 +135,10 @@ async function closeTabs(urls) {
   if (!urls?.length) return;
   const tabs = await browser.tabs.query({});
   const normalized = new Set(urls.map(normalizeUrl));
-  const toClose = tabs.filter(t => normalized.has(normalizeUrl(t.url)));
+  const toClose = tabs.filter(t => !t.active && normalized.has(normalizeUrl(t.url)));
   if (toClose.length > 0) await browser.tabs.remove(toClose.map(t => t.id));
 }
 
-// Tab Actions (no GitHub needed)
 async function groupTabsByDomain() {
   if (!browser.tabs.group) {
     console.log("Tab Grouper: tabs.group API not available");
@@ -149,6 +146,7 @@ async function groupTabsByDomain() {
   }
 
   const tabs = await browser.tabs.query({ currentWindow: true });
+  const activeTab = tabs.find(t => t.active);
   const win = await browser.windows.getCurrent();
   const groups = await browser.tabGroups.query({ windowId: win.id });
   const domainTabs = new Map();
@@ -177,6 +175,11 @@ async function groupTabsByDomain() {
       console.error("Tab Grouper: domain group error", domain, e);
     }
   }
+  
+  if (activeTab) {
+    await browser.tabs.update(activeTab.id, { active: true });
+  }
+  
   console.log("Tab Grouper: grouped", domainTabs.size, "domains");
 }
 
@@ -199,7 +202,6 @@ async function ungroupAllTabs() {
 
   for (const group of groups) {
     try {
-      // Get tabs in this group and ungroup them
       const tabs = await browser.tabs.query({ groupId: group.id });
       if (tabs.length > 0 && browser.tabs.ungroup) {
         await browser.tabs.ungroup(tabs.map(t => t.id));
@@ -214,6 +216,7 @@ async function ungroupAllTabs() {
 
 async function sortTabsAlphabetically() {
   const tabs = await browser.tabs.query({ currentWindow: true });
+  const activeTab = tabs.find(t => t.active);
   const sortable = tabs.filter(t => !t.pinned && t.url);
   
   sortable.sort((a, b) => {
@@ -222,9 +225,15 @@ async function sortTabsAlphabetically() {
     return hostA.localeCompare(hostB) || a.url.localeCompare(b.url);
   });
 
+  const pinnedCount = tabs.filter(t => t.pinned).length;
   for (let i = 0; i < sortable.length; i++) {
-    await browser.tabs.move(sortable[i].id, { index: -1 });
+    await browser.tabs.move(sortable[i].id, { index: pinnedCount + i });
   }
+  
+  if (activeTab) {
+    await browser.tabs.update(activeTab.id, { active: true });
+  }
+  
   console.log("Tab Grouper: sorted", sortable.length, "tabs");
 }
 
@@ -233,7 +242,13 @@ async function closeDuplicateTabs() {
   const seen = new Set();
   const toClose = [];
 
+  const activeTab = tabs.find(t => t.active);
+  if (activeTab) {
+    seen.add(normalizeUrl(activeTab.url));
+  }
+
   for (const tab of tabs) {
+    if (tab.active) continue;
     const normalized = normalizeUrl(tab.url);
     if (seen.has(normalized)) {
       toClose.push(tab.id);
@@ -255,14 +270,17 @@ function sendTabsUpdate() {
   });
 }
 
+function triggerDaemonRefresh() {
+  fetch("http://localhost:19222/refresh", { method: "POST" }).catch(() => {});
+  sendTabsUpdate();
+}
+
 function normalizeUrl(url) {
   if (!url) return "";
   return url.replace(/\/$/, "").replace(/\/(files|commits)$/, "");
 }
 
-// Message handler
 browser.runtime.onMessage.addListener(async (msg) => {
-  // GitHub auth
   if (msg.type === "login") return startDeviceFlow();
   if (msg.type === "logout") {
     await browser.storage.local.remove("token");
@@ -275,7 +293,6 @@ browser.runtime.onMessage.addListener(async (msg) => {
     return { loggedIn: !!token, daemonConnected };
   }
   
-  // Tab actions (no GitHub needed)
   if (msg.type === "groupByDomain") {
     await groupTabsByDomain();
     return { ok: true };
@@ -293,23 +310,25 @@ browser.runtime.onMessage.addListener(async (msg) => {
     return { ok: true };
   }
   
-  // GitHub actions (need token)
   const { token } = await browser.storage.local.get("token");
   if (!token) return { error: "Not logged in" };
   
   if (msg.type === "openMyPRs") {
     const prs = await fetchMyPRs(token);
     await openUrls(prs, "My PRs");
+    triggerDaemonRefresh();
     return { ok: true, count: prs.length };
   }
   if (msg.type === "openReviewPRs") {
     const prs = await fetchReviewPRs(token);
     await openUrls(prs, "Review PRs");
+    triggerDaemonRefresh();
     return { ok: true, count: prs.length };
   }
   if (msg.type === "openMyIssues") {
     const issues = await fetchMyIssues(token);
     await openUrls(issues, "My Issues");
+    triggerDaemonRefresh();
     return { ok: true, count: issues.length };
   }
   if (msg.type === "openNotifications") {
