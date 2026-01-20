@@ -63,9 +63,9 @@ async function graphql(token, query) {
 }
 
 async function fetchMyPRs(token) {
-  const query = `{ viewer { pullRequests(first: 100, states: OPEN) { nodes { url repository { isArchived } } } } }`;
+  const query = `{ search(query: "is:pr is:open author:@me", type: ISSUE, first: 100) { nodes { ... on PullRequest { url repository { isArchived } } } } }`;
   const data = await graphql(token, query);
-  return (data?.viewer?.pullRequests?.nodes || [])
+  return (data?.search?.nodes || [])
     .filter(pr => pr.url && !pr.repository?.isArchived)
     .map(pr => pr.url);
 }
@@ -312,8 +312,10 @@ browser.runtime.onMessage.addListener(async (msg) => {
   
   if (msg.type === "openMyPRs") {
     const { token } = await browser.storage.local.get("token");
+    console.log("Tab Grouper: openMyPRs, token exists:", !!token);
     if (!token) return { error: "Not logged in" };
     const prs = await fetchMyPRs(token);
+    console.log("Tab Grouper: fetched PRs:", prs);
     await openUrls(prs, "My PRs");
     if (daemonConnected) triggerDaemonRefresh();
     return { ok: true, count: prs.length };
