@@ -25,6 +25,7 @@ function showGitHubCode(code) {
   githubCode.classList.remove("hidden");
   githubConnected.classList.add("hidden");
   userCodeEl.textContent = code;
+  navigator.clipboard.writeText(code).catch(() => {});
 }
 
 function showGitHubConnected(daemonConnected) {
