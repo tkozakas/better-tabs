@@ -310,25 +310,31 @@ browser.runtime.onMessage.addListener(async (msg) => {
     return { ok: true };
   }
   
-  const { token } = await browser.storage.local.get("token");
-  if (!token) return { error: "Not logged in" };
-  
   if (msg.type === "openMyPRs") {
+    if (daemonConnected) {
+      triggerDaemonRefresh();
+      return { ok: true };
+    }
+    const { token } = await browser.storage.local.get("token");
+    if (!token) return { error: "Not logged in" };
     const prs = await fetchMyPRs(token);
     await openUrls(prs, "My PRs");
-    triggerDaemonRefresh();
     return { ok: true, count: prs.length };
   }
   if (msg.type === "openReviewPRs") {
+    const { token } = await browser.storage.local.get("token");
+    if (!token) return { error: "Not logged in" };
     const prs = await fetchReviewPRs(token);
     await openUrls(prs, "Review PRs");
-    triggerDaemonRefresh();
+    if (daemonConnected) triggerDaemonRefresh();
     return { ok: true, count: prs.length };
   }
   if (msg.type === "openMyIssues") {
+    const { token } = await browser.storage.local.get("token");
+    if (!token) return { error: "Not logged in" };
     const issues = await fetchMyIssues(token);
     await openUrls(issues, "My Issues");
-    triggerDaemonRefresh();
+    if (daemonConnected) triggerDaemonRefresh();
     return { ok: true, count: issues.length };
   }
   if (msg.type === "openNotifications") {

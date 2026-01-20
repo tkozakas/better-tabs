@@ -132,6 +132,23 @@ func startService() {
 		fmt.Fprintf(os.Stderr, "Unsupported OS: %s\n", runtime.GOOS)
 		os.Exit(1)
 	}
+
+	launchFirefox()
+}
+
+func launchFirefox() {
+	fmt.Println("Launching Firefox...")
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", "-a", "Firefox")
+	case "linux":
+		cmd = exec.Command("firefox")
+	}
+
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to launch Firefox: %v\n", err)
+	}
 }
 
 func shutdownService() {
