@@ -342,7 +342,12 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
 });
 
+let loginInProgress = false;
+
 async function startDeviceFlow() {
+  if (loginInProgress) return { error: "Login already in progress" };
+  loginInProgress = true;
+  
   const codeRes = await fetch("https://github.com/login/device/code", {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
@@ -351,12 +356,13 @@ async function startDeviceFlow() {
   const { device_code, user_code, verification_uri, interval, error } = await codeRes.json();
   
   if (error) {
+    loginInProgress = false;
     return { error };
   }
   
   browser.tabs.create({ url: verification_uri });
   
-  const pollForToken = async () => {
+  (async () => {
     for (let i = 0; i < 180; i++) {
       await new Promise(r => setTimeout(r, (interval || 5) * 1000));
       const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
@@ -367,17 +373,20 @@ async function startDeviceFlow() {
       const data = await tokenRes.json();
       if (data.access_token) {
         await browser.storage.local.set({ token: data.access_token });
-        return { ok: true };
+        console.log("Tab Grouper: logged in successfully");
+        loginInProgress = false;
+        return;
       }
-      if (data.error === "expired_token") return { error: "expired" };
-      if (data.error !== "authorization_pending" && data.error !== "slow_down") {
-        return { error: data.error };
+      if (data.error === "expired_token" || (data.error !== "authorization_pending" && data.error !== "slow_down")) {
+        console.log("Tab Grouper: login failed", data.error);
+        loginInProgress = false;
+        return;
       }
     }
-    return { error: "timeout" };
-  };
+    loginInProgress = false;
+  })();
   
-  return { user_code, verification_uri, pollPromise: pollForToken() };
+  return { user_code, verification_uri };
 }
 
 browser.tabs.onCreated.addListener(sendTabsUpdate);

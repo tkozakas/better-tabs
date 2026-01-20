@@ -57,14 +57,6 @@ document.getElementById("login-btn").addEventListener("click", async () => {
   const result = await browser.runtime.sendMessage({ type: "login" });
   if (result.user_code) {
     showGitHubCode(result.user_code);
-    const pollResult = await result.pollPromise;
-    if (pollResult.ok) {
-      const { daemonConnected } = await browser.runtime.sendMessage({ type: "getStatus" });
-      showGitHubConnected(daemonConnected);
-    } else {
-      showGitHubLogin();
-      alert("Login failed: " + (pollResult.error || "unknown error"));
-    }
   }
 });
 
