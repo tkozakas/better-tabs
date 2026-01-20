@@ -311,14 +311,11 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
   
   if (msg.type === "openMyPRs") {
-    if (daemonConnected) {
-      triggerDaemonRefresh();
-      return { ok: true };
-    }
     const { token } = await browser.storage.local.get("token");
     if (!token) return { error: "Not logged in" };
     const prs = await fetchMyPRs(token);
     await openUrls(prs, "My PRs");
+    if (daemonConnected) triggerDaemonRefresh();
     return { ok: true, count: prs.length };
   }
   if (msg.type === "openReviewPRs") {
