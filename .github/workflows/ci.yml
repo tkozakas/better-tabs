@@ -35,7 +35,8 @@ jobs:
             --source-dir extension \
             --api-key "${{ secrets.AMO_API_KEY }}" \
             --api-secret "${{ secrets.AMO_API_SECRET }}" \
-            --channel listed
+            --channel listed \
+            --amo-metadata extension/amo-metadata.json
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
