@@ -36,12 +36,16 @@ jobs:
             --api-key "${{ secrets.AMO_API_KEY }}" \
             --api-secret "${{ secrets.AMO_API_SECRET }}" \
             --channel listed \
-            --amo-metadata extension/amo-metadata.json
+            --amo-metadata extension/amo-metadata.json \
+            --timeout 900000
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          XPI=$(find extension/web-ext-artifacts -name '*.xpi' | head -1)
+          XPI=$(find web-ext-artifacts -name '*.xpi' 2>/dev/null | head -1)
+          if [ -z "$XPI" ]; then
+            XPI=$(find extension/web-ext-artifacts -name '*.xpi' 2>/dev/null | head -1)
+          fi
           if [ -n "$XPI" ]; then
             gh release create "v${{ steps.version.outputs.version }}" "$XPI" \
               --title "v${{ steps.version.outputs.version }}" \
