@@ -12,7 +12,7 @@
     "<all_urls>"
   ],
   "background": {
-    "scripts": ["background.js"],
+    "scripts": ["lib.js", "background.js"],
     "persistent": true
   },
   "browser_action": {
