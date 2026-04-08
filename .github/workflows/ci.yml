@@ -3,6 +3,7 @@ name: CI/CD
 on:
   push:
     branches: [main]
+    tags: [v*]
   pull_request:
     branches: [main]
 
@@ -18,7 +19,7 @@ jobs:
 
   release:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,9 +27,6 @@ jobs:
         with:
           node-version: 22
       - run: npm install -g web-ext
-      - name: Get version
-        id: version
-        run: echo "version=$(node -p "require('./extension/manifest.json').version")" >> $GITHUB_OUTPUT
       - name: Build and sign
         run: |
           web-ext sign \
@@ -42,13 +40,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TAG="${GITHUB_REF#refs/tags/}"
           XPI=$(find web-ext-artifacts -name '*.xpi' 2>/dev/null | head -1)
           if [ -z "$XPI" ]; then
             XPI=$(find extension/web-ext-artifacts -name '*.xpi' 2>/dev/null | head -1)
           fi
           if [ -n "$XPI" ]; then
-            gh release create "v${{ steps.version.outputs.version }}" "$XPI" \
-              --title "v${{ steps.version.outputs.version }}" \
-              --notes "Release v${{ steps.version.outputs.version }}" \
+            gh release create "$TAG" "$XPI" \
+              --title "$TAG" \
+              --notes "Release $TAG" \
               --latest
           fi
