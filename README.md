@@ -2,6 +2,10 @@
 
 Manage browser tabs and keep site sessions alive.
 
+<p align="center">
+  <img src="assets/preview.svg" alt="Better Tabs popup" width="340">
+</p>
+
 ## Install
 
 ### Quick Install
