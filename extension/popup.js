@@ -1,41 +1,67 @@
-const githubLogin = document.getElementById("github-login");
-const githubCode = document.getElementById("github-code");
-const githubConnected = document.getElementById("github-connected");
-const statusEl = document.getElementById("status");
-const userCodeEl = document.getElementById("user-code");
+const siteListEl = document.getElementById("site-list");
+const intervalSelect = document.getElementById("interval-select");
+const openTabCheck = document.getElementById("open-tab-check");
 
 async function init() {
-  const { loggedIn, daemonConnected } = await browser.runtime.sendMessage({ type: "getStatus" });
-  
-  if (loggedIn || daemonConnected) {
-    showGitHubConnected(daemonConnected);
-  } else {
-    showGitHubLogin();
+  await renderSites();
+  await loadSettings();
+}
+
+async function renderSites() {
+  const sites = await browser.runtime.sendMessage({ type: "getSites" });
+  siteListEl.innerHTML = "";
+
+  if (!sites || sites.length === 0) {
+    siteListEl.innerHTML = '<div class="empty-state">No protected sites yet</div>';
+    return;
   }
+
+  for (const site of sites) {
+    const item = document.createElement("div");
+    item.className = "site-item";
+
+    const statusClass = !site.lastPing ? "pending" : site.lastStatus === "ok" ? "ok" : "error";
+    const pingInfo = site.lastPing ? formatAgo(site.lastPing) : "never";
+
+    item.innerHTML = `
+      <span class="status-dot ${statusClass}"></span>
+      <span class="domain" title="${site.url}">${site.domain}</span>
+      <span class="ping-info">${pingInfo}</span>
+      <button class="toggle-btn" data-domain="${site.domain}" data-enabled="${site.enabled}" title="${site.enabled ? 'Disable' : 'Enable'}">${site.enabled ? '⏸' : '▶'}</button>
+      <button class="remove-btn" data-domain="${site.domain}" title="Remove">&times;</button>
+    `;
+    siteListEl.appendChild(item);
+  }
+
+  siteListEl.querySelectorAll(".remove-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ type: "removeSite", domain: btn.dataset.domain });
+      await renderSites();
+    });
+  });
+
+  siteListEl.querySelectorAll(".toggle-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const enabled = btn.dataset.enabled === "true";
+      await browser.runtime.sendMessage({ type: "toggleSite", domain: btn.dataset.domain, enabled: !enabled });
+      await renderSites();
+    });
+  });
 }
 
-function showGitHubLogin() {
-  githubLogin.classList.remove("hidden");
-  githubCode.classList.add("hidden");
-  githubConnected.classList.add("hidden");
+async function loadSettings() {
+  const settings = await browser.runtime.sendMessage({ type: "getSettings" });
+  intervalSelect.value = String(settings.interval || 5);
+  openTabCheck.checked = settings.onlyWithOpenTab !== false;
 }
 
-function showGitHubCode(code) {
-  githubLogin.classList.add("hidden");
-  githubCode.classList.remove("hidden");
-  githubConnected.classList.add("hidden");
-  userCodeEl.textContent = code;
-  navigator.clipboard.writeText(code).catch(() => {});
+function formatAgo(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  return `${Math.floor(diff / 3600000)}h ago`;
 }
 
-function showGitHubConnected(daemonConnected) {
-  githubLogin.classList.add("hidden");
-  githubCode.classList.add("hidden");
-  githubConnected.classList.remove("hidden");
-  statusEl.textContent = daemonConnected ? "Using CLI daemon" : "Connected";
-}
-
-// Tab Actions (work without GitHub)
 document.getElementById("group-btn").addEventListener("click", () => {
   browser.runtime.sendMessage({ type: "groupByDomain" });
 });
@@ -52,33 +78,28 @@ document.getElementById("close-dupes-btn").addEventListener("click", () => {
   browser.runtime.sendMessage({ type: "closeDuplicates" });
 });
 
-// GitHub Actions
-document.getElementById("login-btn").addEventListener("click", async () => {
-  const result = await browser.runtime.sendMessage({ type: "login" });
-  if (result.user_code) {
-    showGitHubCode(result.user_code);
-  }
+document.getElementById("protect-btn").addEventListener("click", async () => {
+  const { domain, url } = await browser.runtime.sendMessage({ type: "getCurrentTab" });
+  if (!domain) return;
+  await browser.runtime.sendMessage({ type: "addSite", domain, url });
+  await renderSites();
 });
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
-  await browser.runtime.sendMessage({ type: "logout" });
-  showGitHubLogin();
+document.getElementById("ping-now-btn").addEventListener("click", async () => {
+  await browser.runtime.sendMessage({ type: "pingNow" });
+  await renderSites();
 });
 
-document.getElementById("my-prs-btn").addEventListener("click", () => {
-  browser.runtime.sendMessage({ type: "openMyPRs" });
+intervalSelect.addEventListener("change", async () => {
+  const settings = await browser.runtime.sendMessage({ type: "getSettings" });
+  settings.interval = Number(intervalSelect.value);
+  await browser.runtime.sendMessage({ type: "saveSettings", settings });
 });
 
-document.getElementById("review-prs-btn").addEventListener("click", () => {
-  browser.runtime.sendMessage({ type: "openReviewPRs" });
-});
-
-document.getElementById("my-issues-btn").addEventListener("click", () => {
-  browser.runtime.sendMessage({ type: "openMyIssues" });
-});
-
-document.getElementById("notifications-btn").addEventListener("click", () => {
-  browser.runtime.sendMessage({ type: "openNotifications" });
+openTabCheck.addEventListener("change", async () => {
+  const settings = await browser.runtime.sendMessage({ type: "getSettings" });
+  settings.onlyWithOpenTab = openTabCheck.checked;
+  await browser.runtime.sendMessage({ type: "saveSettings", settings });
 });
 
 init();

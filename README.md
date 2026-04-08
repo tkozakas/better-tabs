@@ -1,28 +1,29 @@
-# Tab Grouper
+# Better Tabs
 
-Manage browser tabs: group by domain, sort, close duplicates, and sync GitHub PRs.
+Manage browser tabs and keep site sessions alive.
 
 ## Install
 
-```bash
-./install.sh
-```
+### From Add-ons Store
+
+Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/424d726dc8bc4debbdfe/).
+
+### Local Development
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on**
+3. Select `extension/manifest.json`
 
 ## Features
 
-- **Group by Domain** - Organize tabs into groups by website
-- **Ungroup All** - Remove all tab groups
-- **Sort Alphabetically** - Sort tabs by URL
-- **Close Duplicates** - Remove duplicate tabs
-- **GitHub PR Sync** - Auto-open your open PRs as tabs
+- **Group by Domain** — Organize tabs into groups by website
+- **Ungroup All** — Remove all tab groups
+- **Sort Alphabetically** — Sort tabs by URL
+- **Close Duplicates** — Remove duplicate tabs
+- **Session Keepalive** — Periodically ping protected sites to keep you logged in
 
-## CLI (Optional)
+## Tests
 
 ```bash
-./tab-grouper -start       # Start daemon
-./tab-grouper -shutdown    # Stop daemon
-./tab-grouper -refresh     # Trigger refresh
-./tab-grouper -group       # Group tabs by domain
+npm test
 ```
-
-Requires `gh` CLI authenticated (`gh auth login`).

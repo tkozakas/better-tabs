@@ -1,0 +1,10 @@
+{
+  "name": "better-tabs",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Manage browser tabs and keep site sessions alive",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {}
+}

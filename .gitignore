@@ -1,4 +1,5 @@
-tab-grouper
+better-tabs
 extension/web-ext-artifacts/
+node_modules/
 .env
 .DS_Store

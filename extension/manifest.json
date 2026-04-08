@@ -1,15 +1,15 @@
 {
   "manifest_version": 2,
-  "name": "Tab Grouper",
-  "version": "2.3.6",
-  "description": "Group, sort, and manage browser tabs with GitHub PR integration",
+  "name": "Better Tabs",
+  "version": "3.0.0",
+  "description": "Manage browser tabs and keep site sessions alive",
   "permissions": [
     "tabs",
     "tabGroups",
     "storage",
-    "http://localhost/*",
-    "https://api.github.com/*",
-    "https://github.com/*"
+    "alarms",
+    "cookies",
+    "<all_urls>"
   ],
   "background": {
     "scripts": ["background.js"],
@@ -17,11 +17,11 @@
   },
   "browser_action": {
     "default_popup": "popup.html",
-    "default_title": "Tab Grouper"
+    "default_title": "Better Tabs"
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "pr-tab-grouper@localhost",
+      "id": "better-tabs@localhost",
       "strict_min_version": "139.0"
     }
   }

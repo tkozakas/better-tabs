@@ -1,164 +1,114 @@
-const GITHUB_CLIENT_ID = "Ov23liY8IFluEgbiTfhC";
-const WS_URL = "ws://localhost:19222/ws";
-const SYNC_INTERVAL = 15000;
-const RECONNECT_DELAY = 3000;
-
-let ws = null;
-let reconnectTimer = null;
-let syncTimer = null;
-let daemonConnected = false;
+const KEEPALIVE_ALARM = "keepalive";
+const DEFAULT_INTERVAL = 5;
+const DEFAULT_SETTINGS = { interval: DEFAULT_INTERVAL, onlyWithOpenTab: true };
 
 async function init() {
-  tryConnectDaemon();
+  await scheduleKeepalive();
+  browser.alarms.onAlarm.addListener(onAlarm);
 }
 
-function tryConnectDaemon() {
-  ws = new WebSocket(WS_URL);
-  
-  ws.onopen = () => {
-    daemonConnected = true;
-    if (syncTimer) clearInterval(syncTimer);
-    syncTimer = null;
-    console.log("Tab Grouper: daemon connected");
-    sendTabsUpdate();
-  };
-  
-  ws.onmessage = async (e) => {
-    const data = JSON.parse(e.data);
-    if (data.type === "prs") await handlePRs(data.groups);
-    else if (data.type === "close") await closeTabs(data.toClose);
-    else if (data.type === "group") await groupTabsByDomain();
-  };
-  
-  ws.onclose = () => {
-    daemonConnected = false;
-    scheduleReconnect();
-  };
-  
-  ws.onerror = () => ws.close();
+async function onAlarm(alarm) {
+  if (alarm.name === KEEPALIVE_ALARM) await pingProtectedSites();
 }
 
-function scheduleReconnect() {
-  if (reconnectTimer) return;
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    tryConnectDaemon();
-  }, RECONNECT_DELAY);
+async function scheduleKeepalive() {
+  await browser.alarms.clear(KEEPALIVE_ALARM);
+  const settings = await getSettings();
+  browser.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: settings.interval });
 }
 
-async function graphql(token, query) {
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query })
-  });
-  if (!res.ok) {
-    if (res.status === 401) {
-      await browser.storage.local.remove("token");
-      console.log("Tab Grouper: token expired");
-    }
-    return null;
-  }
-  return (await res.json()).data;
+async function getProtectedSites() {
+  const { sites } = await browser.storage.local.get("sites");
+  return sites || [];
 }
 
-async function fetchMyPRs(token) {
-  const query = `{ search(query: "is:pr is:open author:@me", type: ISSUE, first: 100) { nodes { ... on PullRequest { url repository { isArchived } } } } }`;
-  const data = await graphql(token, query);
-  return (data?.search?.nodes || [])
-    .filter(pr => pr.url && !pr.repository?.isArchived)
-    .map(pr => pr.url);
+async function saveProtectedSites(sites) {
+  await browser.storage.local.set({ sites });
 }
 
-async function fetchReviewPRs(token) {
-  const query = `{ search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: 100) { nodes { ... on PullRequest { url repository { isArchived } } } } }`;
-  const data = await graphql(token, query);
-  return (data?.search?.nodes || [])
-    .filter(pr => pr.url && !pr.repository?.isArchived)
-    .map(pr => pr.url);
+async function getSettings() {
+  const { settings } = await browser.storage.local.get("settings");
+  return mergeSettings(settings || {}, DEFAULT_SETTINGS);
 }
 
-async function fetchMyIssues(token) {
-  const query = `{ search(query: "is:issue is:open assignee:@me", type: ISSUE, first: 100) { nodes { ... on Issue { url repository { isArchived } } } } }`;
-  const data = await graphql(token, query);
-  return (data?.search?.nodes || [])
-    .filter(issue => issue.url && !issue.repository?.isArchived)
-    .map(issue => issue.url);
+async function saveSettings(settings) {
+  await browser.storage.local.set({ settings });
+  await scheduleKeepalive();
 }
 
-async function openUrls(urls, groupName) {
-  if (!urls?.length) return;
-  
-  const win = await browser.windows.getCurrent();
-  const existingTabs = await browser.tabs.query({});
-  const existingUrls = new Set(existingTabs.map(t => normalizeUrl(t.url)));
-  const tabIds = [];
+async function addProtectedSite(domain, url) {
+  const sites = await getProtectedSites();
+  if (sites.find(s => s.domain === domain)) return sites;
+  sites.push(buildSiteEntry(domain, url));
+  await saveProtectedSites(sites);
+  return sites;
+}
 
-  for (const url of urls) {
-    if (!existingUrls.has(normalizeUrl(url))) {
-      const tab = await browser.tabs.create({ url, active: false, windowId: win.id });
-      tabIds.push(tab.id);
-    } else {
-      const existing = existingTabs.find(t => normalizeUrl(t.url) === normalizeUrl(url));
-      if (existing) tabIds.push(existing.id);
-    }
-  }
+async function removeProtectedSite(domain) {
+  let sites = await getProtectedSites();
+  sites = sites.filter(s => s.domain !== domain);
+  await saveProtectedSites(sites);
+  return sites;
+}
 
-  if (tabIds.length > 0 && browser.tabs.group && groupName) {
+async function toggleProtectedSite(domain, enabled) {
+  const sites = await getProtectedSites();
+  const site = sites.find(s => s.domain === domain);
+  if (site) site.enabled = enabled;
+  await saveProtectedSites(sites);
+  return sites;
+}
+
+async function updateSiteUrl(domain, url) {
+  const sites = await getProtectedSites();
+  const site = sites.find(s => s.domain === domain);
+  if (site) site.url = url;
+  await saveProtectedSites(sites);
+  return sites;
+}
+
+async function pingProtectedSites() {
+  const sites = await getProtectedSites();
+  const settings = await getSettings();
+  const openTabs = await browser.tabs.query({});
+  const openDomains = new Set();
+
+  for (const tab of openTabs) {
     try {
-      const groups = await browser.tabGroups.query({ windowId: win.id });
-      const existing = groups.find(g => g.title === groupName);
-      if (existing) {
-        await browser.tabs.group({ tabIds, groupId: existing.id });
-      } else {
-        const groupId = await browser.tabs.group({ tabIds, createProperties: { windowId: win.id } });
-        await browser.tabGroups.update(groupId, { title: groupName });
-      }
-    } catch (e) {
-      console.error("Tab Grouper: group error", e);
+      openDomains.add(new URL(tab.url).hostname);
+    } catch {}
+  }
+
+  const targets = filterPingTargets(sites, settings, openDomains);
+  if (targets.length === 0) return;
+
+  for (const site of targets) {
+    try {
+      const res = await fetch(site.url, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        redirect: "follow"
+      });
+      site.lastPing = Date.now();
+      site.lastStatus = res.ok ? "ok" : `${res.status}`;
+    } catch {
+      site.lastPing = Date.now();
+      site.lastStatus = "error";
     }
   }
-}
 
-async function handlePRs(groups) {
-  if (!groups) return;
-  const tabs = await browser.tabs.query({});
-  for (const group of groups) {
-    if (group.urls?.length > 0) {
-      await openUrls(group.urls, group.groupName);
-    }
-  }
-  sendTabsUpdate();
-}
-
-async function closeTabs(urls) {
-  if (!urls?.length) return;
-  const tabs = await browser.tabs.query({});
-  const normalized = new Set(urls.map(normalizeUrl));
-  const toClose = tabs.filter(t => !t.active && normalized.has(normalizeUrl(t.url)));
-  if (toClose.length > 0) await browser.tabs.remove(toClose.map(t => t.id));
+  await saveProtectedSites(sites);
 }
 
 async function groupTabsByDomain() {
-  if (!browser.tabs.group) {
-    console.log("Tab Grouper: tabs.group API not available");
-    return;
-  }
+  if (!browser.tabs.group) return;
 
   const tabs = await browser.tabs.query({ currentWindow: true });
   const activeTab = tabs.find(t => t.active);
   const win = await browser.windows.getCurrent();
   const groups = await browser.tabGroups.query({ windowId: win.id });
-  const domainTabs = new Map();
-
-  for (const tab of tabs) {
-    if (!tab.url || tab.pinned) continue;
-    try {
-      const domain = new URL(tab.url).hostname;
-      if (!domainTabs.has(domain)) domainTabs.set(domain, []);
-      domainTabs.get(domain).push(tab);
-    } catch {}
-  }
+  const domainTabs = groupByDomain(tabs);
 
   for (const [domain, tabList] of domainTabs) {
     if (tabList.length === 0) continue;
@@ -172,33 +122,20 @@ async function groupTabsByDomain() {
         await browser.tabGroups.update(groupId, { title: domain });
       }
     } catch (e) {
-      console.error("Tab Grouper: domain group error", domain, e);
+      console.error("Better Tabs: domain group error", domain, e);
     }
   }
-  
+
   if (activeTab) {
     await browser.tabs.update(activeTab.id, { active: true });
   }
-  
-  console.log("Tab Grouper: grouped", domainTabs.size, "domains");
 }
 
 async function ungroupAllTabs() {
+  if (!browser.tabGroups) return;
+
   const win = await browser.windows.getCurrent();
-  
-  if (!browser.tabGroups) {
-    console.log("Tab Grouper: tabGroups API not available");
-    return;
-  }
-
   const groups = await browser.tabGroups.query({ windowId: win.id });
-  
-  if (groups.length === 0) {
-    console.log("Tab Grouper: no groups found");
-    return;
-  }
-
-  console.log("Tab Grouper: removing", groups.length, "groups");
 
   for (const group of groups) {
     try {
@@ -207,92 +144,36 @@ async function ungroupAllTabs() {
         await browser.tabs.ungroup(tabs.map(t => t.id));
       }
     } catch (e) {
-      console.error("Tab Grouper: error removing group", group.id, e);
+      console.error("Better Tabs: error removing group", group.id, e);
     }
   }
-  
-  console.log("Tab Grouper: removed all groups");
 }
 
 async function sortTabsAlphabetically() {
   const tabs = await browser.tabs.query({ currentWindow: true });
   const activeTab = tabs.find(t => t.active);
-  const sortable = tabs.filter(t => !t.pinned && t.url);
-  
-  sortable.sort((a, b) => {
-    const hostA = new URL(a.url).hostname;
-    const hostB = new URL(b.url).hostname;
-    return hostA.localeCompare(hostB) || a.url.localeCompare(b.url);
-  });
+  const sorted = sortTabs(tabs);
 
   const pinnedCount = tabs.filter(t => t.pinned).length;
-  for (let i = 0; i < sortable.length; i++) {
-    await browser.tabs.move(sortable[i].id, { index: pinnedCount + i });
+  for (let i = 0; i < sorted.length; i++) {
+    await browser.tabs.move(sorted[i].id, { index: pinnedCount + i });
   }
-  
+
   if (activeTab) {
     await browser.tabs.update(activeTab.id, { active: true });
   }
-  
-  console.log("Tab Grouper: sorted", sortable.length, "tabs");
 }
 
 async function closeDuplicateTabs() {
   const tabs = await browser.tabs.query({ currentWindow: true });
-  const seen = new Set();
-  const toClose = [];
-
-  const activeTab = tabs.find(t => t.active);
-  if (activeTab) {
-    seen.add(normalizeUrl(activeTab.url));
-  }
-
-  for (const tab of tabs) {
-    if (tab.active) continue;
-    const normalized = normalizeUrl(tab.url);
-    if (seen.has(normalized)) {
-      toClose.push(tab.id);
-    } else {
-      seen.add(normalized);
-    }
-  }
+  const toClose = findDuplicates(tabs);
 
   if (toClose.length > 0) {
     await browser.tabs.remove(toClose);
   }
-  console.log("Tab Grouper: closed", toClose.length, "duplicates");
-}
-
-function sendTabsUpdate() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  browser.tabs.query({}).then(tabs => {
-    ws.send(JSON.stringify({ type: "tabs", openUrls: tabs.map(t => t.url).filter(Boolean) }));
-  });
-}
-
-function triggerDaemonRefresh() {
-  fetch("http://localhost:19222/refresh", { method: "POST" }).catch(() => {});
-  sendTabsUpdate();
-}
-
-function normalizeUrl(url) {
-  if (!url) return "";
-  return url.replace(/\/$/, "").replace(/\/(files|commits)$/, "");
 }
 
 browser.runtime.onMessage.addListener(async (msg) => {
-  if (msg.type === "login") return startDeviceFlow();
-  if (msg.type === "logout") {
-    await browser.storage.local.remove("token");
-    if (syncTimer) clearInterval(syncTimer);
-    syncTimer = null;
-    return { ok: true };
-  }
-  if (msg.type === "getStatus") {
-    const { token } = await browser.storage.local.get("token");
-    return { loggedIn: !!token, daemonConnected };
-  }
-  
   if (msg.type === "groupByDomain") {
     await groupTabsByDomain();
     return { ok: true };
@@ -309,88 +190,39 @@ browser.runtime.onMessage.addListener(async (msg) => {
     await closeDuplicateTabs();
     return { ok: true };
   }
-  
-  if (msg.type === "openMyPRs") {
-    const { token } = await browser.storage.local.get("token");
-    console.log("Tab Grouper: openMyPRs, token exists:", !!token);
-    if (!token) return { error: "Not logged in" };
-    const prs = await fetchMyPRs(token);
-    console.log("Tab Grouper: fetched PRs:", prs);
-    await openUrls(prs, "My PRs");
-    if (daemonConnected) triggerDaemonRefresh();
-    return { ok: true, count: prs.length };
+
+  if (msg.type === "getSites") {
+    return await getProtectedSites();
   }
-  if (msg.type === "openReviewPRs") {
-    const { token } = await browser.storage.local.get("token");
-    if (!token) return { error: "Not logged in" };
-    const prs = await fetchReviewPRs(token);
-    await openUrls(prs, "Review PRs");
-    if (daemonConnected) triggerDaemonRefresh();
-    return { ok: true, count: prs.length };
+  if (msg.type === "getSettings") {
+    return await getSettings();
   }
-  if (msg.type === "openMyIssues") {
-    const { token } = await browser.storage.local.get("token");
-    if (!token) return { error: "Not logged in" };
-    const issues = await fetchMyIssues(token);
-    await openUrls(issues, "My Issues");
-    if (daemonConnected) triggerDaemonRefresh();
-    return { ok: true, count: issues.length };
-  }
-  if (msg.type === "openNotifications") {
-    await browser.tabs.create({ url: "https://github.com/notifications" });
+  if (msg.type === "saveSettings") {
+    await saveSettings(msg.settings);
     return { ok: true };
   }
-});
-
-let loginInProgress = false;
-
-async function startDeviceFlow() {
-  if (loginInProgress) return { error: "Login already in progress" };
-  loginInProgress = true;
-  
-  const codeRes = await fetch("https://github.com/login/device/code", {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-    body: `client_id=${GITHUB_CLIENT_ID}&scope=repo read:org`
-  });
-  const { device_code, user_code, verification_uri, interval, error } = await codeRes.json();
-  
-  if (error) {
-    loginInProgress = false;
-    return { error };
+  if (msg.type === "addSite") {
+    return await addProtectedSite(msg.domain, msg.url);
   }
-  
-  browser.tabs.create({ url: verification_uri });
-  
-  (async () => {
-    for (let i = 0; i < 180; i++) {
-      await new Promise(r => setTimeout(r, (interval || 5) * 1000));
-      const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-        body: `client_id=${GITHUB_CLIENT_ID}&device_code=${device_code}&grant_type=urn:ietf:params:oauth:grant-type:device_code`
-      });
-      const data = await tokenRes.json();
-      if (data.access_token) {
-        await browser.storage.local.set({ token: data.access_token });
-        console.log("Tab Grouper: logged in successfully");
-        loginInProgress = false;
-        return;
-      }
-      if (data.error === "expired_token" || (data.error !== "authorization_pending" && data.error !== "slow_down")) {
-        console.log("Tab Grouper: login failed", data.error);
-        loginInProgress = false;
-        return;
-      }
-    }
-    loginInProgress = false;
-  })();
-  
-  return { user_code, verification_uri };
-}
-
-browser.tabs.onCreated.addListener(sendTabsUpdate);
-browser.tabs.onRemoved.addListener(sendTabsUpdate);
-browser.tabs.onUpdated.addListener((_, c) => { if (c.url) sendTabsUpdate(); });
+  if (msg.type === "removeSite") {
+    return await removeProtectedSite(msg.domain);
+  }
+  if (msg.type === "toggleSite") {
+    return await toggleProtectedSite(msg.domain, msg.enabled);
+  }
+  if (msg.type === "updateSiteUrl") {
+    return await updateSiteUrl(msg.domain, msg.url);
+  }
+  if (msg.type === "pingNow") {
+    await pingProtectedSites();
+    return await getProtectedSites();
+  }
+  if (msg.type === "getCurrentTab") {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url) return { domain: null, url: null };
+    const domain = extractDomain(tab.url);
+    return { domain, url: tab.url };
+  }
+});
 
 init();
