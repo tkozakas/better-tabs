@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Better Tabs",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Manage browser tabs and keep site sessions alive",
   "permissions": [
     "tabs",

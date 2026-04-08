@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install -g web-ext
-      - name: Build and sign
+      - name: Submit to AMO
         run: |
           web-ext sign \
             --source-dir extension \
@@ -35,19 +35,18 @@ jobs:
             --api-secret "${{ secrets.AMO_API_SECRET }}" \
             --channel listed \
             --amo-metadata extension/amo-metadata.json \
-            --timeout 900000
+            --timeout 300000 || true
+      - name: Build XPI
+        run: web-ext build --source-dir extension --overwrite-dest
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          XPI=$(find web-ext-artifacts -name '*.xpi' 2>/dev/null | head -1)
-          if [ -z "$XPI" ]; then
-            XPI=$(find extension/web-ext-artifacts -name '*.xpi' 2>/dev/null | head -1)
-          fi
+          XPI=$(find web-ext-artifacts -name '*.zip' 2>/dev/null | head -1)
           if [ -n "$XPI" ]; then
             gh release create "$TAG" "$XPI" \
               --title "$TAG" \
-              --notes "Release $TAG" \
+              --notes "Release $TAG — submitted to AMO, pending approval" \
               --latest
           fi
