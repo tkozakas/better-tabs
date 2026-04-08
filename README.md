@@ -4,6 +4,13 @@ Manage browser tabs and keep site sessions alive.
 
 ## Install
 
+### Quick Install
+
+```bash
+./install.sh          # opens the Firefox Add-ons store
+./install.sh -local   # prints instructions for loading the extension locally
+```
+
 ### From Add-ons Store
 
 Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/424d726dc8bc4debbdfe/).
