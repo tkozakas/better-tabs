@@ -1,8 +1,8 @@
+# Better Tabs
+
 <p align="center">
   <img src="extension/icon.svg" alt="Better Tabs" width="128">
 </p>
-
-# Better Tabs
 
 Manage browser tabs and keep site sessions alive.
 
