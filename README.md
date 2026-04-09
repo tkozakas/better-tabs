@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="extension/icon.svg" alt="Better Tabs" width="128">
+</p>
+
 # Better Tabs
 
 Manage browser tabs and keep site sessions alive.
@@ -8,7 +12,7 @@ Manage browser tabs and keep site sessions alive.
 
 ## Install
 
-Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/424d726dc8bc4debbdfe/).
+Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/better-tabs1/).
 
 ### Local Development
 
