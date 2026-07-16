@@ -16,6 +16,8 @@ async function renderSites() {
     return;
   }
 
+  sites.sort((a, b) => a.domain.localeCompare(b.domain));
+
   for (const site of sites) {
     const item = document.createElement("div");
     item.className = "site-item";
