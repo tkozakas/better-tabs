@@ -10,16 +10,6 @@ Manage browser tabs and keep site sessions alive.
   <img src="assets/preview.png" alt="Better Tabs popup" width="340">
 </p>
 
-## Install
-
-Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/better-tabs1/).
-
-### Local Development
-
-1. Open `about:debugging#/runtime/this-firefox`
-2. Click **Load Temporary Add-on**
-3. Select `extension/manifest.json`
-
 ## Features
 
 - **Group by Domain** (Alt+Shift+G) - Organize tabs into groups by website, optionally merging subdomains; single tabs stay ungrouped
@@ -31,6 +21,16 @@ Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/be
 - **Logout Alerts** - Get notified when a ping fails or lands on a login page, before you lose work
 - **Export / Import** - Back up the protected site list or move it to another browser
 - **Sync** - The site list follows your Firefox account across machines
+
+## Install
+
+Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/better-tabs1/).
+
+### Local Development
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on**
+3. Select `extension/manifest.json`
 
 ## Tests
 
