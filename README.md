@@ -27,7 +27,7 @@ Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/be
 - **Sort** (Alt+Shift+S) - Sort tabs by site and title; groups stay intact on top, loose tabs sorted below
 - **Close Duplicates** (Alt+Shift+D) - Remove duplicate tabs with one-click undo; can ignore query strings, never closes pinned or audible tabs
 - **Live Mode** - Automatically dedupe, sort, and optionally group tabs as you browse
-- **Session Keepalive** - Ping protected sites in the background so you stay logged in, with per-site ping intervals and URLs
+- **Session Keepalive** - Ping protected sites in the background so you stay logged in, with per-site ping intervals and URLs ([how it works](docs/how-it-works.md))
 - **Logout Alerts** - Get notified when a ping fails or lands on a login page, before you lose work
 - **Export / Import** - Back up the protected site list or move it to another browser
 - **Sync** - The site list follows your Firefox account across machines
