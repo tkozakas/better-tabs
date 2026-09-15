@@ -1,4 +1,10 @@
 {
+  "summary": {
+    "en-US": "Group, sort, and dedupe your tabs, and keep site sessions alive so you never get logged out."
+  },
+  "description": {
+    "en-US": "<b>Features:</b>\n<ul>\n<li><b>Group by Domain</b> - Organize open tabs into groups by website, optionally merging subdomains (mail.google.com + docs.google.com). Single tabs stay ungrouped.</li>\n<li><b>Ungroup All</b> - Remove all tab groups with one click</li>\n<li><b>Sort</b> - Sort tabs by site and title. Groups stay intact at the top, loose tabs are sorted below.</li>\n<li><b>Close Duplicates</b> - Find and close duplicate tabs, with one-click Undo. Optionally ignores query strings. Never closes pinned or audible tabs.</li>\n<li><b>Live Mode</b> - Automatically dedupe, sort, and optionally group tabs as you browse</li>\n<li><b>Session Keepalive</b> - Periodically ping your chosen sites to keep sessions alive, even during long AFK periods</li>\n<li><b>Logout Alerts</b> - Get a notification when a ping fails or lands on a login page, before you lose work</li>\n<li><b>Keyboard Shortcuts</b> - Alt+Shift+G to group, Alt+Shift+S to sort, Alt+Shift+D to dedupe</li>\n</ul>\nSession Keepalive is fully opt-in: you choose which sites to protect, each with its own ping URL and interval. Your list syncs with your Firefox account and can be exported or imported as JSON.\n\nLightweight, no external services, no data collection. Just better tabs.\n\nSource code: <a href=\"https://github.com/tkozakas/better-tabs\">github.com/tkozakas/better-tabs</a>"
+  },
   "version": {
     "license": "MIT"
   },
