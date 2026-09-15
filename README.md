@@ -1,13 +1,13 @@
 # Better Tabs
 
+Manage browser tabs and keep site sessions alive.
+
 <p align="center">
   <img src="extension/icon.svg" alt="Better Tabs" width="128">
 </p>
 
-Manage browser tabs and keep site sessions alive.
-
 <p align="center">
-  <img src="assets/preview.svg" alt="Better Tabs popup" width="340">
+  <img src="assets/preview.png" alt="Better Tabs popup" width="340">
 </p>
 
 ## Install
