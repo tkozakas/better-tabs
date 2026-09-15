@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+      - run: npm install -g web-ext
+      - run: web-ext lint --source-dir extension
 
   release:
     needs: test

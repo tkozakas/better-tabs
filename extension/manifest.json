@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Better Tabs",
-  "version": "3.0.3",
+  "version": "3.1.0",
   "description": "Manage browser tabs and keep site sessions alive",
   "permissions": [
     "tabs",
@@ -9,6 +9,8 @@
     "storage",
     "alarms",
     "cookies",
+    "notifications",
+    "sessions",
     "<all_urls>"
   ],
   "background": {
@@ -24,10 +26,25 @@
     "default_title": "Better Tabs",
     "default_icon": "icon.svg"
   },
+  "commands": {
+    "group-tabs": {
+      "suggested_key": { "default": "Alt+Shift+G" },
+      "description": "Group tabs by domain"
+    },
+    "sort-tabs": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Sort tabs by site and title"
+    },
+    "close-duplicates": {
+      "suggested_key": { "default": "Alt+Shift+D" },
+      "description": "Close duplicate tabs"
+    }
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "better-tabs@localhost",
-      "strict_min_version": "139.0"
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
     }
   }
 }

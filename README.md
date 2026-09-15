@@ -22,11 +22,15 @@ Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/be
 
 ## Features
 
-- **Group by Domain** — Organize tabs into groups by website
-- **Ungroup All** — Remove all tab groups
-- **Sort Alphabetically** — Sort tabs by URL
-- **Close Duplicates** — Remove duplicate tabs
-- **Session Keepalive** — Periodically ping protected sites to keep you logged in
+- **Group by Domain** (Alt+Shift+G) - Organize tabs into groups by website, optionally merging subdomains; single tabs stay ungrouped
+- **Ungroup All** - Remove all tab groups
+- **Sort** (Alt+Shift+S) - Sort tabs by site and title; groups stay intact on top, loose tabs sorted below
+- **Close Duplicates** (Alt+Shift+D) - Remove duplicate tabs with one-click undo; can ignore query strings, never closes pinned or audible tabs
+- **Live Mode** - Automatically dedupe, sort, and optionally group tabs as you browse
+- **Session Keepalive** - Ping protected sites in the background so you stay logged in, with per-site ping intervals and URLs
+- **Logout Alerts** - Get notified when a ping fails or lands on a login page, before you lose work
+- **Export / Import** - Back up the protected site list or move it to another browser
+- **Sync** - The site list follows your Firefox account across machines
 
 ## Tests
 

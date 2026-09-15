@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { groupByDomain } = require("../extension/lib.js");
+const { groupByDomain, baseDomain } = require("../extension/lib.js");
 
 describe("groupByDomain", () => {
   it("groups tabs by hostname", () => {
@@ -56,5 +56,52 @@ describe("groupByDomain", () => {
 
     assert.equal(result.size, 1);
     assert.ok(result.has("valid.com"));
+  });
+});
+
+describe("baseDomain", () => {
+  it("returns eTLD+1 for subdomains", () => {
+    assert.equal(baseDomain("mail.google.com"), "google.com");
+    assert.equal(baseDomain("a.b.c.example.org"), "example.org");
+  });
+
+  it("returns bare domains unchanged", () => {
+    assert.equal(baseDomain("example.com"), "example.com");
+    assert.equal(baseDomain("localhost"), "localhost");
+  });
+
+  it("handles two-level public suffixes", () => {
+    assert.equal(baseDomain("shop.amazon.co.uk"), "amazon.co.uk");
+    assert.equal(baseDomain("news.bbc.co.uk"), "bbc.co.uk");
+  });
+
+  it("leaves ip addresses alone", () => {
+    assert.equal(baseDomain("192.168.0.1"), "192.168.0.1");
+  });
+});
+
+describe("groupByDomain with base domains", () => {
+  it("merges subdomains into one group", () => {
+    const tabs = [
+      { id: 1, url: "https://mail.google.com/", pinned: false },
+      { id: 2, url: "https://docs.google.com/", pinned: false },
+      { id: 3, url: "https://other.com/", pinned: false }
+    ];
+
+    const result = groupByDomain(tabs, true);
+
+    assert.equal(result.size, 2);
+    assert.equal(result.get("google.com").length, 2);
+  });
+
+  it("keeps subdomains separate by default", () => {
+    const tabs = [
+      { id: 1, url: "https://mail.google.com/", pinned: false },
+      { id: 2, url: "https://docs.google.com/", pinned: false }
+    ];
+
+    const result = groupByDomain(tabs);
+
+    assert.equal(result.size, 2);
   });
 });
