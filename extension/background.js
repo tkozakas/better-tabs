@@ -217,9 +217,19 @@ async function groupTabsByDomain() {
     }
   }
 
+  await ungroupSingleTabDomainGroups(win.id, domainTabs);
+
   if (activeTab) {
     await browser.tabs.update(activeTab.id, { active: true });
   }
+}
+
+async function ungroupSingleTabDomainGroups(windowId, domainTabs) {
+  if (!browser.tabs.ungroup) return;
+  const tabs = await browser.tabs.query({ windowId });
+  const groups = await browser.tabGroups.query({ windowId });
+  const loneTabIds = findSingleTabDomainGroups(tabs, groups, [...domainTabs.keys()]);
+  if (loneTabIds.length > 0) await browser.tabs.ungroup(loneTabIds);
 }
 
 async function ungroupAllTabs() {

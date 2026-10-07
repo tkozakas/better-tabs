@@ -48,6 +48,18 @@ function groupByDomain(tabs, useBaseDomain = false) {
   return domainTabs;
 }
 
+function findSingleTabDomainGroups(tabs, groups, domains) {
+  const domainSet = new Set(domains);
+  const ownGroupIds = new Set(groups.filter(g => domainSet.has(g.title)).map(g => g.id));
+  const members = new Map();
+  for (const tab of tabs) {
+    if (!ownGroupIds.has(tab.groupId)) continue;
+    if (!members.has(tab.groupId)) members.set(tab.groupId, []);
+    members.get(tab.groupId).push(tab.id);
+  }
+  return [...members.values()].filter(ids => ids.length === 1).map(([id]) => id);
+}
+
 function findDuplicates(tabs, ignoreQuery = false) {
   const seen = new Set();
   const toClose = [];
@@ -177,6 +189,7 @@ if (typeof module !== "undefined" && module.exports) {
     extractDomain,
     baseDomain,
     groupByDomain,
+    findSingleTabDomainGroups,
     findDuplicates,
     sortTabs,
     planGroupedSort,

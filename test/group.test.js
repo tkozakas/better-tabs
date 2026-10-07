@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { groupByDomain, baseDomain } = require("../extension/lib.js");
+const { groupByDomain, baseDomain, findSingleTabDomainGroups } = require("../extension/lib.js");
 
 describe("groupByDomain", () => {
   it("groups tabs by hostname", () => {
@@ -103,5 +103,29 @@ describe("groupByDomain with base domains", () => {
     const result = groupByDomain(tabs);
 
     assert.equal(result.size, 2);
+  });
+});
+
+describe("findSingleTabDomainGroups", () => {
+  const groups = [
+    { id: 10, title: "example.com" },
+    { id: 20, title: "github.com" },
+    { id: 30, title: "My stuff" }
+  ];
+
+  it("returns the tab left alone in a domain group", () => {
+    const tabs = [
+      { id: 1, groupId: 10 },
+      { id: 2, groupId: 20 },
+      { id: 3, groupId: 20 }
+    ];
+
+    assert.deepEqual(findSingleTabDomainGroups(tabs, groups, ["example.com", "github.com"]), [1]);
+  });
+
+  it("leaves user-named groups with one tab alone", () => {
+    const tabs = [{ id: 1, groupId: 30 }];
+
+    assert.deepEqual(findSingleTabDomainGroups(tabs, groups, ["example.com"]), []);
   });
 });
