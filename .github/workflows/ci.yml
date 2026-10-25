@@ -33,13 +33,24 @@ jobs:
       - run: npm install -g web-ext
       - name: Submit to AMO
         run: |
+          set +e
           web-ext sign \
             --source-dir extension \
             --api-key "${{ secrets.AMO_API_KEY }}" \
             --api-secret "${{ secrets.AMO_API_SECRET }}" \
             --channel listed \
             --amo-metadata extension/amo-metadata.json \
-            --timeout 300000 || true
+            --timeout 300000 2>&1 | tee sign.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            if grep -qiE 'Your add-on has been submitted|version already exists|timeout|timed out' sign.log; then
+              echo "AMO submission pending approval or already exists; continuing"
+            else
+              echo "AMO submission failed" >&2
+              exit "$status"
+            fi
+          fi
       - name: Build XPI
         run: web-ext build --source-dir extension --overwrite-dest
       - name: Create GitHub release
@@ -49,8 +60,13 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           XPI=$(find web-ext-artifacts -name '*.zip' 2>/dev/null | head -1)
           if [ -n "$XPI" ]; then
+            if [ -f release-notes.md ]; then
+              NOTES=(--notes-file release-notes.md)
+            else
+              NOTES=(--notes "Release $TAG — submitted to AMO, pending approval")
+            fi
             gh release create "$TAG" "$XPI" \
               --title "$TAG" \
-              --notes "Release $TAG — submitted to AMO, pending approval" \
+              "${NOTES[@]}" \
               --latest
           fi

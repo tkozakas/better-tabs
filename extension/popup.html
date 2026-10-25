@@ -2,196 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      width: 340px;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      background: #0d1117;
-      color: #e6edf3;
-    }
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #30363d;
-    }
-    .header svg { width: 24px; height: 24px; fill: #58a6ff; }
-    .header h1 { font-size: 16px; font-weight: 600; }
-    .section {
-      margin-bottom: 16px;
-    }
-    .section-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: #8b949e;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-    }
-    .btn {
-      width: 100%;
-      padding: 10px 16px;
-      margin: 5px 0;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .btn svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
-    .primary { background: #238636; color: white; }
-    .primary:hover { background: #2ea043; }
-    .secondary { background: #21262d; color: #e6edf3; border: 1px solid #30363d; }
-    .secondary:hover { background: #30363d; }
-    .divider {
-      height: 1px;
-      background: #30363d;
-      margin: 16px 0;
-    }
-    .btn-row {
-      display: flex;
-      gap: 8px;
-    }
-    .btn-row .btn {
-      flex: 1;
-      justify-content: center;
-    }
-    .toast {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      margin: 6px 0;
-      background: #1c2a1e;
-      border: 1px solid #238636;
-      border-radius: 6px;
-      font-size: 13px;
-    }
-    .toast span { flex: 1; }
-    .toast button {
-      background: none;
-      border: none;
-      color: #58a6ff;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .site-list {
-      max-height: 220px;
-      overflow-y: auto;
-    }
-    .site-item {
-      margin: 4px 0;
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      font-size: 13px;
-    }
-    .site-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-    }
-    .site-item .domain {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-    .site-item .domain:hover { color: #58a6ff; }
-    .site-item .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .site-item .status-dot.ok { background: #3fb950; }
-    .site-item .status-dot.warn { background: #d29922; }
-    .site-item .status-dot.error { background: #f85149; }
-    .site-item .status-dot.pending { background: #8b949e; }
-    .site-item .remove-btn {
-      background: none;
-      border: none;
-      color: #8b949e;
-      cursor: pointer;
-      padding: 2px;
-      font-size: 16px;
-      line-height: 1;
-    }
-    .site-item .remove-btn:hover { color: #f85149; }
-    .site-item .toggle-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 2px;
-      font-size: 14px;
-      line-height: 1;
-    }
-    .site-detail {
-      display: none;
-      flex-direction: column;
-      gap: 6px;
-      padding: 0 10px 10px;
-      border-top: 1px solid #30363d;
-      padding-top: 8px;
-    }
-    .site-item.expanded .site-detail { display: flex; }
-    .site-detail label {
-      font-size: 11px;
-      color: #8b949e;
-    }
-    .site-detail input, .site-detail select {
-      width: 100%;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 4px;
-      color: #e6edf3;
-      padding: 5px 8px;
-      font-size: 12px;
-    }
-    .empty-state {
-      color: #8b949e;
-      font-size: 13px;
-      text-align: center;
-      padding: 16px 0;
-    }
-    .settings-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 0;
-      font-size: 13px;
-      color: #8b949e;
-    }
-    .settings-row label { flex: 1; }
-    .settings-row select {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 4px;
-      color: #e6edf3;
-      padding: 4px 8px;
-      font-size: 13px;
-      width: 70px;
-    }
-    .settings-row input[type="checkbox"] {
-      accent-color: #238636;
-    }
-    .ping-info {
-      font-size: 11px;
-      color: #6e7681;
-    }
-  </style>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="header">
@@ -231,11 +42,15 @@
       <input type="checkbox" id="base-domain-check">
     </div>
     <div class="settings-row">
-      <label for="live-mode-check">Live mode (auto dedupe &amp; sort)</label>
+      <label for="live-mode-check">Live mode (auto dedupe)</label>
       <input type="checkbox" id="live-mode-check">
     </div>
-    <div class="settings-row">
-      <label for="live-group-check" title="When Live mode is on, group tabs from the same website into tab groups">Live mode (auto group)</label>
+    <div class="settings-row sub" id="live-sort-row">
+      <label for="live-sort-check">Auto sort</label>
+      <input type="checkbox" id="live-sort-check">
+    </div>
+    <div class="settings-row sub" id="live-group-row">
+      <label for="live-group-check">Auto group</label>
       <input type="checkbox" id="live-group-check">
     </div>
   </div>
@@ -246,7 +61,7 @@
     <div class="section-title">Session Keepalive</div>
     <button class="btn primary" id="protect-btn" title="Pings this site in the background so its login session never expires">
       <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
-      Keep Me Logged In on This Site
+      <span id="protect-label">Keep Me Logged In on This Site</span>
     </button>
     <button class="btn secondary" id="ping-now-btn" title="Ping all protected sites now">
       <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
@@ -254,27 +69,14 @@
     </button>
     <div class="site-list" id="site-list"></div>
 
-    <div class="btn-row">
-      <button class="btn secondary" id="export-btn" title="Export protected sites to a JSON file">
-        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-        Export
-      </button>
-      <button class="btn secondary" id="import-btn" title="Import protected sites from a JSON file">
-        <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
-        Import
-      </button>
-    </div>
+    <button class="btn secondary" id="transfer-btn" title="Export or import protected sites">
+      <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      Back up / restore
+    </button>
 
     <div class="settings-row">
       <label for="interval-select">Default ping interval</label>
-      <select id="interval-select">
-        <option value="1">1 min</option>
-        <option value="2">2 min</option>
-        <option value="5" selected>5 min</option>
-        <option value="10">10 min</option>
-        <option value="15">15 min</option>
-        <option value="30">30 min</option>
-      </select>
+      <select id="interval-select"></select>
     </div>
   </div>
 

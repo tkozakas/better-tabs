@@ -122,18 +122,6 @@ function planGroupedSort(tabs, groups) {
   return { groupOrder, groupedTabs, ungrouped: sortTabs(ungrouped) };
 }
 
-function planSortedOrder(tabs, groups) {
-  const { groupOrder, groupedTabs, ungrouped } = planGroupedSort(tabs, groups);
-  const ordered = [];
-  for (const id of groupOrder) ordered.push(...groupedTabs.get(id));
-  ordered.push(...ungrouped);
-  return ordered;
-}
-
-function filterPingTargets(sites) {
-  return sites.filter(site => site.enabled);
-}
-
 function classifyPing(domain, ok, status, finalUrl) {
   if (!ok) return status ? String(status) : "error";
   try {
@@ -153,9 +141,7 @@ function buildSiteEntry(domain, url) {
     domain,
     url: url || `https://${domain}/`,
     enabled: true,
-    interval: null,
-    lastPing: null,
-    lastStatus: null
+    interval: null
   };
 }
 
@@ -179,6 +165,45 @@ function mergeSites(existing, imported) {
   return merged;
 }
 
+function splitSiteStatus(sites, statuses) {
+  const cleaned = [];
+  const merged = { ...statuses };
+  let changed = false;
+  for (const site of sites) {
+    if (!("lastPing" in site) && !("lastStatus" in site)) {
+      cleaned.push(site);
+      continue;
+    }
+    changed = true;
+    const { lastPing, lastStatus, ...config } = site;
+    cleaned.push(config);
+    if (!merged[site.domain] && (lastPing || lastStatus)) {
+      merged[site.domain] = { lastPing: lastPing ?? null, lastStatus: lastStatus ?? null };
+    }
+  }
+  return { changed, sites: cleaned, statuses: merged };
+}
+
+function hasFailingSite(sites, statuses) {
+  return sites.some(site => {
+    if (!site.enabled) return false;
+    const status = statuses[site.domain]?.lastStatus;
+    return status != null && status !== "ok";
+  });
+}
+
+const BOOLEAN_SETTINGS = ["dedupeIgnoreQuery", "groupByBaseDomain", "liveMode", "liveSort", "liveAutoGroup"];
+
+function sanitizeSettingsPatch(patch) {
+  const clean = {};
+  if (!patch || typeof patch !== "object") return clean;
+  if (Number.isFinite(patch.interval) && patch.interval > 0) clean.interval = patch.interval;
+  for (const key of BOOLEAN_SETTINGS) {
+    if (typeof patch[key] === "boolean") clean[key] = patch[key];
+  }
+  return clean;
+}
+
 function mergeSettings(saved, defaults) {
   return { ...defaults, ...saved };
 }
@@ -193,13 +218,14 @@ if (typeof module !== "undefined" && module.exports) {
     findDuplicates,
     sortTabs,
     planGroupedSort,
-    planSortedOrder,
-    filterPingTargets,
     classifyPing,
     effectiveInterval,
     buildSiteEntry,
     sanitizeSiteEntry,
     mergeSites,
+    splitSiteStatus,
+    hasFailingSite,
+    sanitizeSettingsPatch,
     mergeSettings
   };
 }

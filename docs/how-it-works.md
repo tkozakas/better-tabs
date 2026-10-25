@@ -25,9 +25,11 @@ const res = await fetch(site.url, {
 });
 ```
 
-`credentials: "include"` makes Firefox attach the same session cookies your logged-in tab uses (that's why the extension needs the `cookies` + `<all_urls>` permissions). From the server's perspective this request is indistinguishable from you refreshing the page, so it resets the inactivity timer and often re-issues a fresh cookie. Repeat every N minutes and the session never idles out.
+`credentials: "include"` makes Firefox attach the same session cookies your logged-in tab uses (the extension asks for permission to each protected site individually, via `*://<domain>/*`, and never for all websites). From the server's perspective this request is indistinguishable from you refreshing the page, so it resets the inactivity timer and often re-issues a fresh cookie. Repeat every N minutes and the session never idles out.
 
-3. **The response is checked, not just fired**: `classifyPing` looks at where the request actually landed. HTTP error → red dot; a 200 that got redirected to another domain or a `/login`/`/sso` path → yellow dot (that's the "you're logged out but the server said 200" case), and a flip from green triggers the desktop notification.
+3. **The response is checked, not just fired**: `classifyPing` looks at where the request actually landed. HTTP error → red dot; a 200 that got redirected to another domain or a `/login`/`/sso` path → yellow dot (that's the "you're logged out but the server said 200" case), and a flip from green triggers the desktop notification. The toolbar badge shows a red `!` while any enabled site is not OK. Sites whose permission was revoked are skipped and reported as no access.
+
+The site list syncs through your Firefox account, but ping status (last ping time and result) is stored locally and stays on each computer.
 
 ## The limits
 

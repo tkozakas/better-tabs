@@ -1,38 +1,16 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  filterPingTargets,
   classifyPing,
   effectiveInterval,
   buildSiteEntry,
   sanitizeSiteEntry,
+  splitSiteStatus,
+  hasFailingSite,
+  sanitizeSettingsPatch,
   mergeSites,
   mergeSettings
 } = require("../extension/lib.js");
-
-describe("filterPingTargets", () => {
-  const sites = [
-    { domain: "a.com", enabled: true },
-    { domain: "b.com", enabled: false },
-    { domain: "c.com", enabled: true }
-  ];
-
-  it("includes every enabled site", () => {
-    const result = filterPingTargets(sites);
-
-    assert.deepEqual(result.map(s => s.domain), ["a.com", "c.com"]);
-  });
-
-  it("excludes disabled sites", () => {
-    const result = filterPingTargets(sites);
-
-    assert.ok(result.every(s => s.enabled));
-  });
-
-  it("handles empty sites array", () => {
-    assert.deepEqual(filterPingTargets([]), []);
-  });
-});
 
 describe("classifyPing", () => {
   it("returns ok for a successful same-site response", () => {
@@ -92,9 +70,7 @@ describe("buildSiteEntry", () => {
       domain: "example.com",
       url: "https://example.com/dashboard",
       enabled: true,
-      interval: null,
-      lastPing: null,
-      lastStatus: null
+      interval: null
     });
   });
 
@@ -115,9 +91,7 @@ describe("sanitizeSiteEntry", () => {
       domain: "a.com",
       url: "https://a.com/app",
       enabled: false,
-      interval: 2,
-      lastPing: null,
-      lastStatus: null
+      interval: 2
     });
   });
 
@@ -145,7 +119,7 @@ describe("sanitizeSiteEntry", () => {
 });
 
 describe("mergeSites", () => {
-  const existing = [{ domain: "a.com", url: "https://a.com/", enabled: true, interval: null, lastPing: 1, lastStatus: "ok" }];
+  const existing = [{ domain: "a.com", url: "https://a.com/", enabled: true, interval: null }];
 
   it("appends new imported sites", () => {
     const result = mergeSites(existing, [{ domain: "b.com" }]);
@@ -159,7 +133,6 @@ describe("mergeSites", () => {
 
     assert.equal(result.length, 1);
     assert.equal(result[0].url, "https://a.com/");
-    assert.equal(result[0].lastPing, 1);
   });
 
   it("skips invalid imported entries", () => {
@@ -201,5 +174,59 @@ describe("mergeSettings", () => {
 
     assert.equal(result.extra, "value");
     assert.equal(result.interval, 5);
+  });
+});
+
+describe("splitSiteStatus", () => {
+  it("moves status fields out of site entries", () => {
+    const sites = [{ domain: "a.com", url: "u", enabled: true, interval: null, lastPing: 5, lastStatus: "ok" }];
+
+    const result = splitSiteStatus(sites, {});
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.sites, [{ domain: "a.com", url: "u", enabled: true, interval: null }]);
+    assert.deepEqual(result.statuses, { "a.com": { lastPing: 5, lastStatus: "ok" } });
+  });
+
+  it("keeps existing local status", () => {
+    const sites = [{ domain: "a.com", lastPing: 5, lastStatus: "ok" }];
+
+    const result = splitSiteStatus(sites, { "a.com": { lastPing: 9, lastStatus: "500" } });
+
+    assert.deepEqual(result.statuses["a.com"], { lastPing: 9, lastStatus: "500" });
+  });
+
+  it("reports no change for clean sites", () => {
+    assert.equal(splitSiteStatus([{ domain: "a.com" }], {}).changed, false);
+  });
+});
+
+describe("hasFailingSite", () => {
+  const sites = [{ domain: "a.com", enabled: true }, { domain: "b.com", enabled: false }];
+
+  it("is false when statuses are ok or unknown", () => {
+    assert.equal(hasFailingSite(sites, { "a.com": { lastStatus: "ok" } }), false);
+    assert.equal(hasFailingSite(sites, {}), false);
+  });
+
+  it("is true for a failing enabled site", () => {
+    assert.equal(hasFailingSite(sites, { "a.com": { lastStatus: "no-access" } }), true);
+  });
+
+  it("ignores disabled sites", () => {
+    assert.equal(hasFailingSite(sites, { "b.com": { lastStatus: "500" } }), false);
+  });
+});
+
+describe("sanitizeSettingsPatch", () => {
+  it("keeps only valid known keys", () => {
+    const patch = { interval: 7, liveMode: true, liveSort: "yes", bogus: 1 };
+
+    assert.deepEqual(sanitizeSettingsPatch(patch), { interval: 7, liveMode: true });
+  });
+
+  it("rejects bad intervals and non-objects", () => {
+    assert.deepEqual(sanitizeSettingsPatch({ interval: 0 }), {});
+    assert.deepEqual(sanitizeSettingsPatch(null), {});
   });
 });
