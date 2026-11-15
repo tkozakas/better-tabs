@@ -11,7 +11,7 @@ Manage browser tabs and keep site sessions alive.
 </p>
 
 <p align="center">
-  <img src="assets/preview.png" alt="Better Tabs popup" width="340">
+  <img src="assets/demo.gif" alt="Better Tabs closing duplicate tabs, grouping tabs by site and flagging a logged-out site" width="760">
 </p>
 
 ## Features
