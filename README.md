@@ -2,6 +2,10 @@
 
 Manage browser tabs and keep site sessions alive.
 
+[![Firefox Add-on](https://img.shields.io/amo/v/better-tabs1?label=Firefox%20Add-on)](https://addons.mozilla.org/firefox/addon/better-tabs1/)
+[![Users](https://img.shields.io/amo/users/better-tabs1)](https://addons.mozilla.org/firefox/addon/better-tabs1/)
+[![Rating](https://img.shields.io/amo/rating/better-tabs1)](https://addons.mozilla.org/firefox/addon/better-tabs1/reviews/)
+
 <p align="center">
   <img src="extension/icon.svg" alt="Better Tabs" width="128">
 </p>
@@ -24,7 +28,7 @@ Manage browser tabs and keep site sessions alive.
 
 ## Install
 
-Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/better-tabs1/).
+Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/better-tabs1/). If it helps you, a [review](https://addons.mozilla.org/firefox/addon/better-tabs1/reviews/) helps others find it.
 
 ### Local Development
 
