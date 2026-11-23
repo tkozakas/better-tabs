@@ -177,7 +177,7 @@ function scheduleLiveCleanup() {
 }
 
 async function runLivePass(settings) {
-  await closeDuplicateTabs();
+  if (settings.liveDedupe) await closeDuplicateTabs();
   if (settings.liveAutoGroup) await groupTabsByDomain();
   if (settings.liveSort) await sortTabsAlphabetically({ keepActiveInPlace: true });
 }

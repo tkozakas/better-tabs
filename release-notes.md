@@ -1,3 +1,7 @@
+## What's new in v3.2.2
+
+- **Live mode no longer dedupes by default.** Turn on **Auto dedupe** under Live mode to close duplicates automatically.
+
 ## What's new in v3.2.0
 
 - **Live mode is now "auto dedupe"** with two sub-options: **Auto sort** and **Auto group**. It never moves the tab you are currently on.
@@ -16,7 +20,7 @@
 - **Ungroup All**: removes every tab group.
 - **Sort** (Alt+Shift+S): orders tabs by site and title. Groups stay on top, loose tabs go below.
 - **Close Duplicates** (Alt+Shift+D): closes repeated tabs, never pinned or audible ones. Undo brings back exactly those tabs.
-- **Live Mode**: closes duplicates automatically as you browse. Optionally sorts and groups too, without moving your current tab.
+- **Live Mode**: sorts tabs automatically as you browse, without moving your current tab. Optionally groups and closes duplicates too.
 - **Session Keepalive**: regularly visits the sites you choose in the background so they don't log you out. You grant access one site at a time.
 - **Logout Alerts**: a red `!` badge and a notification when a site may have logged you out.
 - **Back up / Restore**: export or import your protected site list.

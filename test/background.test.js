@@ -261,6 +261,19 @@ describe("live mode", () => {
     assert.equal(bg.state.calls.move.length, 0);
   });
 
+  it("dedupes only when liveDedupe is on", async () => {
+    const dupes = () => [tab(1, "https://a.com/", { active: true }), tab(2, "https://a.com/")];
+    const off = loadBackground({ sync: { settings: { liveMode: true } }, tabs: dupes() });
+    await off.ready;
+    await off.call("runLiveCleanup()");
+    assert.equal(off.state.calls.remove.length, 0);
+
+    const on = loadBackground({ sync: { settings: { liveMode: true, liveDedupe: true } }, tabs: dupes() });
+    await on.ready;
+    await on.call("runLiveCleanup()");
+    assert.ok(on.state.calls.remove.length > 0);
+  });
+
   it("does nothing when live mode is off", async () => {
     const bg = loadBackground({ tabs: [tab(1, "https://a.com/", { active: true }), tab(2, "https://a.com/")] });
     await bg.ready;

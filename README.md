@@ -19,7 +19,7 @@ Manage browser tabs and keep site sessions alive.
 - **Group** (Alt+Shift+G) - Group tabs by site
 - **Sort** (Alt+Shift+S) - Order tabs by site and title
 - **Dedupe** (Alt+Shift+D) - Close duplicate tabs, with Undo
-- **Live Mode** - Dedupe, sort and group automatically as you browse
+- **Live Mode** - Sort, group and optionally dedupe automatically as you browse
 - **Keepalive** - Stay logged in to chosen sites ([how it works](docs/how-it-works.md))
 - **Logout Alerts** - Know when a site logs you out
 - **Back up & Sync** - Site list syncs with Firefox and exports to JSON

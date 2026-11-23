@@ -5,10 +5,11 @@ const checkboxes = [
   ["ignore-query-check", "dedupeIgnoreQuery"],
   ["base-domain-check", "groupByBaseDomain"],
   ["live-mode-check", "liveMode"],
+  ["live-dedupe-check", "liveDedupe"],
   ["live-sort-check", "liveSort"],
   ["live-group-check", "liveAutoGroup"]
 ];
-const liveSubRows = ["live-sort-row", "live-group-row"];
+const liveSubRows = ["live-dedupe-row", "live-sort-row", "live-group-row"];
 const protectBtn = document.getElementById("protect-btn");
 const protectLabel = document.getElementById("protect-label");
 

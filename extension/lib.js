@@ -192,7 +192,7 @@ function hasFailingSite(sites, statuses) {
   });
 }
 
-const BOOLEAN_SETTINGS = ["dedupeIgnoreQuery", "groupByBaseDomain", "liveMode", "liveSort", "liveAutoGroup"];
+const BOOLEAN_SETTINGS = ["dedupeIgnoreQuery", "groupByBaseDomain", "liveMode", "liveDedupe", "liveSort", "liveAutoGroup"];
 
 function sanitizeSettingsPatch(patch) {
   const clean = {};

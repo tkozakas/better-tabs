@@ -4,6 +4,7 @@ const DEFAULT_SETTINGS = {
   dedupeIgnoreQuery: false,
   groupByBaseDomain: false,
   liveMode: false,
+  liveDedupe: false,
   liveSort: true,
   liveAutoGroup: false
 };
