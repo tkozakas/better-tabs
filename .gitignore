@@ -1,5 +1,6 @@
 better-tabs
 extension/web-ext-artifacts/
+dist/
 node_modules/
 .env
 .DS_Store

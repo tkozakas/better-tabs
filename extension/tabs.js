@@ -1,6 +1,5 @@
 const LIVE_DEBOUNCE_MS = 1000;
 
-let lastClosed = null;
 let liveTimer = null;
 let liveRunning = false;
 let liveRerun = false;
@@ -134,17 +133,32 @@ async function closeDuplicateTabs() {
 
   const closing = tabs.filter(t => toClose.has(t.id));
   await browser.tabs.remove(closing.map(t => t.id));
-  lastClosed = {
-    at: Date.now(),
-    tabs: closing.map(t => ({ url: t.url, index: t.index, windowId: t.windowId, pinned: false }))
-  };
+  await browser.storage.session.set({
+    lastClosed: {
+      at: Date.now(),
+      tabs: closing.map(t => ({ url: t.url, index: t.index, windowId: t.windowId, pinned: false }))
+    }
+  });
   return closing.length;
 }
 
+async function readLastClosed() {
+  const { lastClosed } = await browser.storage.session.get("lastClosed");
+  return lastClosed || null;
+}
+
+async function takeLastClosed() {
+  return withStorageLock(async () => {
+    const lastClosed = await readLastClosed();
+    if (lastClosed) await browser.storage.session.remove("lastClosed");
+    return lastClosed;
+  });
+}
+
 async function undoLastClose() {
+  const lastClosed = await takeLastClosed();
   if (!lastClosed) return 0;
   const { tabs } = lastClosed;
-  lastClosed = null;
   let restored = 0;
   for (const tab of [...tabs].sort((a, b) => a.index - b.index)) {
     try {
@@ -163,7 +177,8 @@ async function undoLastClose() {
   return restored;
 }
 
-function getLastClosed() {
+async function getLastClosed() {
+  const lastClosed = await readLastClosed();
   return { count: lastClosed ? lastClosed.tabs.length : 0, at: lastClosed ? lastClosed.at : null };
 }
 

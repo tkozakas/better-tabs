@@ -19,6 +19,10 @@ function createArea(initial = {}) {
     async set(values) {
       await Promise.resolve();
       Object.assign(data, structuredClone(values));
+    },
+    async remove(keys) {
+      await Promise.resolve();
+      for (const key of typeof keys === "string" ? [keys] : keys) delete data[key];
     }
   };
 }
@@ -45,7 +49,7 @@ function createFakeBrowser({ sync = {}, local = {}, tabs = [], groups = [], perm
   const originOf = o => o.origins || [];
 
   const browser = {
-    storage: { sync: createArea(sync), local: createArea(local) },
+    storage: { sync: createArea(sync), local: createArea(local), session: createArea() },
     permissions: {
       async contains({ origins }) { return originOf({ origins }).every(o => state.permissions.has(o)); },
       async request({ origins }) { origins.forEach(o => state.permissions.add(o)); return true; },

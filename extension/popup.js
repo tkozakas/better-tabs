@@ -299,4 +299,8 @@ for (const [id, key] of checkboxes) {
   });
 }
 
+if (!browser.runtime.getURL("").startsWith("moz-extension:")) {
+  document.querySelector(".footer-link").href = `https://chromewebstore.google.com/detail/${browser.runtime.id}/reviews`;
+}
+
 init();

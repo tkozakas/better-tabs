@@ -18,6 +18,7 @@ jobs:
       - run: npm test
       - run: npm install -g web-ext
       - run: web-ext lint --source-dir extension
+      - run: npm run build:chrome
 
   release:
     needs: test
@@ -25,6 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,6 +59,11 @@ jobs:
           fi
       - name: Build XPI
         run: web-ext build --source-dir extension --overwrite-dest
+      - name: Build Chrome zip
+        run: npm run build:chrome
+      - name: Publish to Chrome Web Store
+        if: env.REFRESH_TOKEN != ''
+        run: npx -y chrome-webstore-upload-cli@3 --source dist/better-tabs-chrome.zip
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -65,7 +76,7 @@ jobs:
             else
               NOTES=(--notes "Release $TAG — submitted to AMO, pending approval")
             fi
-            gh release create "$TAG" "$XPI" \
+            gh release create "$TAG" "$XPI" dist/better-tabs-chrome.zip \
               --title "$TAG" \
               "${NOTES[@]}" \
               --latest

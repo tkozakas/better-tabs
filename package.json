@@ -4,7 +4,8 @@
   "private": true,
   "description": "Manage browser tabs and keep site sessions alive",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build:chrome": "node scripts/build-chrome.js"
   },
   "devDependencies": {}
 }

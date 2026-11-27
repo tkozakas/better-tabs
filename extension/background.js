@@ -43,14 +43,17 @@ async function init() {
   await migrateStorage();
   await scheduleKeepalive();
   await updateBadge();
-  browser.alarms.onAlarm.addListener(onAlarm);
-  browser.tabs.onCreated.addListener(scheduleLiveCleanup);
-  browser.tabs.onUpdated.addListener(onTabUpdated);
-  if (browser.commands) {
-    browser.commands.onCommand.addListener(onCommand);
-  }
 }
 
-browser.runtime.onMessage.addListener(onMessage);
-
 const backgroundReady = init();
+
+browser.runtime.onMessage.addListener(onMessage);
+browser.alarms.onAlarm.addListener(async alarm => {
+  await backgroundReady;
+  await onAlarm(alarm);
+});
+browser.tabs.onCreated.addListener(scheduleLiveCleanup);
+browser.tabs.onUpdated.addListener(onTabUpdated);
+if (browser.commands) {
+  browser.commands.onCommand.addListener(onCommand);
+}

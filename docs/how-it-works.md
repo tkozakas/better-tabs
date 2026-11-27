@@ -25,14 +25,14 @@ const res = await fetch(site.url, {
 });
 ```
 
-`credentials: "include"` makes Firefox attach the same session cookies your logged-in tab uses (the extension asks for permission to each protected site individually, via `*://<domain>/*`, and never for all websites). From the server's perspective this request is indistinguishable from you refreshing the page, so it resets the inactivity timer and often re-issues a fresh cookie. Repeat every N minutes and the session never idles out.
+`credentials: "include"` makes the browser attach the same session cookies your logged-in tab uses (the extension asks for permission to each protected site individually, via `*://<domain>/*`, and never for all websites). From the server's perspective this request is indistinguishable from you refreshing the page, so it resets the inactivity timer and often re-issues a fresh cookie. Repeat every N minutes and the session never idles out.
 
 3. **The response is checked, not just fired**: `classifyPing` looks at where the request actually landed. HTTP error → red dot; a 200 that got redirected to another domain or a `/login`/`/sso` path → yellow dot (that's the "you're logged out but the server said 200" case), and a flip from green triggers the desktop notification. The toolbar badge shows a red `!` while any enabled site is not OK. Sites whose permission was revoked are skipped and reported as no access.
 
-The site list syncs through your Firefox account, but ping status (last ping time and result) is stored locally and stays on each computer.
+The site list syncs through your Firefox or Google account, but ping status (last ping time and result) is stored locally and stays on each computer.
 
 ## The limits
 
 - It resets inactivity timeouts, the overwhelmingly common kind. It can't beat absolute lifetimes (e.g. banks that force re-login every 8h regardless of activity) or servers that require re-authentication cryptographically.
-- It only works while Firefox is running. A closed browser sends no pings.
+- It only works while the browser is running. A closed browser sends no pings.
 - It rides on cookies you already have; if you actively log out, the cookie is invalidated and pinging can't bring the session back (you'll see the yellow/red dot + notification).

@@ -164,6 +164,20 @@ describe("settings and sites", () => {
     assert.equal(settings.liveSort, true);
   });
 
+  it("keeps running alarms when a restarted background reschedules", async () => {
+    const bg = loadBackground({ sync: { sites: [site("a.com"), site("b.com", { interval: 15 }), site("c.com", { enabled: false })] } });
+    await bg.ready;
+    const running = bg.state.alarms.get("keepalive:b.com");
+    bg.state.alarms.set("keepalive:c.com", { name: "keepalive:c.com", periodInMinutes: 5 });
+    bg.state.alarms.set("keepalive:a.com", { name: "keepalive:a.com", periodInMinutes: 1 });
+
+    await bg.call("scheduleKeepalive()");
+
+    assert.equal(bg.state.alarms.get("keepalive:b.com"), running);
+    assert.equal(bg.state.alarms.get("keepalive:a.com").periodInMinutes, 5);
+    assert.equal(bg.state.alarms.has("keepalive:c.com"), false);
+  });
+
   it("reschedules alarms only when interval changes", async () => {
     const bg = loadBackground({ sync: { sites: [site("a.com")] } });
     await bg.ready;

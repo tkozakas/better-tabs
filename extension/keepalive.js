@@ -1,4 +1,5 @@
 const ALARM_PREFIX = "keepalive:";
+const toolbarAction = browser.action || browser.browserAction;
 
 async function onAlarm(alarm) {
   if (alarm.name.startsWith(ALARM_PREFIX)) {
@@ -7,24 +8,21 @@ async function onAlarm(alarm) {
 }
 
 async function scheduleKeepalive() {
-  const alarms = await browser.alarms.getAll();
+  const [alarms, settings, sites] = await Promise.all([browser.alarms.getAll(), readSettings(), readSites()]);
+  const wanted = new Map(sites.filter(s => s.enabled).map(s => [ALARM_PREFIX + s.domain, effectiveInterval(s, settings)]));
   for (const alarm of alarms) {
-    if (alarm.name.startsWith(ALARM_PREFIX)) await browser.alarms.clear(alarm.name);
+    if (!alarm.name.startsWith(ALARM_PREFIX)) continue;
+    if (wanted.get(alarm.name) === alarm.periodInMinutes) wanted.delete(alarm.name);
+    else await browser.alarms.clear(alarm.name);
   }
-  const settings = await readSettings();
-  const sites = await readSites();
-  for (const site of sites.filter(s => s.enabled)) {
-    browser.alarms.create(ALARM_PREFIX + site.domain, {
-      periodInMinutes: effectiveInterval(site, settings)
-    });
-  }
+  for (const [name, periodInMinutes] of wanted) browser.alarms.create(name, { periodInMinutes });
 }
 
 async function updateBadge() {
   const [sites, statuses] = await Promise.all([readSites(), readSiteStatus()]);
   const failing = hasFailingSite(sites, statuses);
-  await browser.browserAction.setBadgeText({ text: failing ? "!" : "" });
-  if (failing) await browser.browserAction.setBadgeBackgroundColor({ color: "#f85149" });
+  await toolbarAction.setBadgeText({ text: failing ? "!" : "" });
+  if (failing) await toolbarAction.setBadgeBackgroundColor({ color: "#f85149" });
 }
 
 function notifySessionLost(domain, status) {

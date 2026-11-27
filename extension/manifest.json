@@ -8,8 +8,7 @@
     "tabGroups",
     "storage",
     "alarms",
-    "notifications",
-    "sessions"
+    "notifications"
   ],
   "optional_permissions": ["*://*/*"],
   "background": {
